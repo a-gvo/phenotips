@@ -17,12 +17,7 @@
  */
 package org.phenotips.vocabulary.internal.solr;
 
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVRecord;
-
 import org.phenotips.obo2solr.TermData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -31,6 +26,11 @@ import java.net.URL;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
+
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Class for parsing the hpo source, while gathering annotations from HPO-gene mapping from the Human Phenotype
@@ -42,8 +42,8 @@ import java.util.Map;
 public class HpoAnnotationSourceParser
 {
     private static final String PHENOTYPE_TO_GENES_ANNOTATIONS_URL =
-            "http://compbio.charite.de/jenkins/job/hpo.annotations.monthly/lastStableBuild/artifact/annotation/" +
-                    "ALL_SOURCES_ALL_FREQUENCIES_phenotype_to_genes.txt";
+            "http://compbio.charite.de/jenkins/job/hpo.annotations.monthly/lastStableBuild/artifact/annotation/"
+                    + "ALL_SOURCES_ALL_FREQUENCIES_phenotype_to_genes.txt";
 
     private static final String ENCODING = "UTF-8";
 

@@ -17,7 +17,6 @@
  */
 package org.phenotips.vocabulary.internal.solr;
 
-import org.apache.solr.client.solrj.response.TermsResponse;
 import org.phenotips.obo2solr.TermData;
 import org.phenotips.vocabulary.VocabularyTerm;
 
