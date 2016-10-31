@@ -23,8 +23,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.Map;
 
 import org.apache.commons.csv.CSVFormat;
@@ -97,11 +95,12 @@ public class HpoAnnotationSourceParser
     private void linkGeneToPhenotype(final TermData termData, final String geneName)
     {
         if (null != termData && !geneName.isEmpty()) {
-            if (!termData.containsKey(GENES)) {
-                termData.put(GENES, new HashSet<String>());
-            }
-            final Collection<String> genes = termData.get(GENES);
-            genes.add(geneName);
+            termData.addTo(GENES, geneName);
+//            if (!termData.containsKey(GENES)) {
+//                termData.put(GENES, new HashSet<String>());
+//            }
+//            final Collection<String> genes = termData.get(GENES);
+//            genes.add(geneName);
         }
     }
 
