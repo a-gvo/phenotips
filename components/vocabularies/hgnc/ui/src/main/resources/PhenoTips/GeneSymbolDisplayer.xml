@@ -52,7 +52,7 @@
   #if ($xcontext.action == 'edit')
     {{html wiki="false" clean="false"}}&lt;input type='text' name='${prefix}symbol' class='suggested suggest-gene gene-name $!termStatus' placeholder='$placeholder' size='16' value='$!{gene.symbol}'/&gt;&lt;input type='hidden' name='${prefix}${name}' class='gene-id' value='$!{gene.id}'/&gt;{{/html}}
   #else
-    ${gene.symbol}#if("$!{gene.symbol}" != ''){{html wiki="false" clean="false"}}&lt;input type='hidden' name='gene_name' class='gene-name' value="$!{gene.symbol}"/&gt;{{/html}}#end
+    ${gene.symbol}#if("$!{gene.symbol}" != ''){{html wiki="false" clean="false"}}&lt;input type='hidden' name='gene_name' class='#if ("$!termStatus" != "other-gene-name")gene-name #end $!{termStatus}' value="$!{gene.symbol}"/&gt;{{/html}}#end
   #end
 #end
 ##
@@ -60,6 +60,8 @@
 #macro (_validateGeneId $geneData $termStatus)
   #if (!$geneData.id.matches('^ENSG[0-9]{11}$'))
     #set ($termStatus = "nonstandard")
+  #else
+    #set ($termStatus = "other-gene-name")
   #end
 #end
 ##
