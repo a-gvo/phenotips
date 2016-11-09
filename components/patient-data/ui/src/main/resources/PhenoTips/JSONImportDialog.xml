@@ -132,6 +132,11 @@
         "value": "",
         "class": "import-textarea"
       });
+
+      this.idMismatchWarning = new Element('div', {'class': 'box warningmessage import-warning-idmismatch hidden'});
+
+      this.mainDiv.insert(this.idMismatchWarning);
+
       this.mainDiv.insert(this.jsonData);
 
       this._initFilePicker();
@@ -173,7 +178,12 @@
       });
 
       this.textareaChangeFunction = function() {
-        importButton.disabled = _this.jsonData.value.trim() == "";
+        importButton.disabled = _this.jsonData.value.strip() == "";
+      };
+
+      this.textareaTextEntered = function() {
+        if (!importButton.disabled)
+          _this._processImportedData();
       };
 
       // different browsers require different event for onchange detection (special cases: IE, paste, backspace)
@@ -181,16 +191,21 @@
       eventList.each(function(item) {
         _this.jsonData.observe(item, _this.textareaChangeFunction);
       });
+
+      if (this._builder.performIdCheck)
+        this.jsonData.observe("input", this.textareaTextEntered);
     },
 
     importServices : {
       'single-patient-import' : {
         'service' : XWiki.contextPath + '/rest/patients/' + XWiki.currentDocument.page + '?method=PUT',
-        'modalTitle' : "$escapetool.javascript($services.localization.render('phenotips.patientRecord.jsonImportDialog.title.singlePatient'))"
+        'modalTitle' : "$escapetool.javascript($services.localization.render('phenotips.patientRecord.jsonImportDialog.title.singlePatient'))",
+        'performIdCheck' : true
       },
       'multi-patient-import' : {
         'service' : XWiki.contextPath + 'rest/patients',
-        'modalTitle' : "$escapetool.javascript($services.localization.render('phenotips.patientRecord.jsonImportDialog.title.multiplePatients'))"
+        'modalTitle' : "$escapetool.javascript($services.localization.render('phenotips.patientRecord.jsonImportDialog.title.multiplePatients'))",
+        'performIdCheck' : false
       }
     },
 
@@ -203,8 +218,10 @@
         var fr = new FileReader();
         var _this = this;
         fr.onload = function(e) {
-          _this.jsonData.value = e.target.result;
+          _this.jsonData.value = e.target.result.strip();
           _this.textareaChangeFunction();
+          if (_this._builder.performIdCheck)
+            _this.textareaTextEntered();
         };
         fr.readAsText(nextFile);
       }
@@ -225,11 +242,35 @@
         {extraClassName: "import-dialog", title: this._builder.modalTitle, displayCloseButton: true});
     },
 
+    _processImportedData : function () {
+      var patient;
+      try {
+        patient = this.jsonData.value.evalJSON();
+      } catch(err) {
+        this.idMismatchWarning.addClassName("hidden");
+        return;
+      }
+      var currentPatientId = XWiki.currentDocument.page;
+      if (patient.id != null &amp;&amp; patient.id !== currentPatientId) {
+        this.idMismatchWarning.update(this._generateMismatchWarningMsg(patient.id, currentPatientId));
+        this.idMismatchWarning.removeClassName('hidden');
+        delete patient.id;
+        this.jsonData.value = Object.toJSON(patient);
+      } else {
+        this.idMismatchWarning.addClassName('hidden');
+      }
+    },
+
+    _generateMismatchWarningMsg : function (inputPatientId, currentPatientId) {
+      var warning = "$escapetool.javascript($services.localization.render('phenotips.patientRecord.jsonImportDialog.warning.patientIdMismatch'))";
+      var inputPatientRegex = /___input_id___/gi;
+      var currentPatientRegex = /___current_id___/gi;
+      return warning.replace(inputPatientRegex, inputPatientId).replace(currentPatientRegex, currentPatientId);
+    },
+
     _importJsonData : function() {
       var importVal = this.jsonData.value.strip();
-
       this.hide();
-
       this._updatePatientValues(importVal);
     },
 
@@ -332,6 +373,7 @@
 
     hide: function() {
       this.jsonData.value = "";
+      this.idMismatchWarning.addClassName('hidden');
       this.dialog.closeDialog();
     }
   });
@@ -467,6 +509,10 @@
 
 .import-warning-nofileupload {
   margin-bottom: 1em;
+}
+
+.import-warning-idmismatch {
+  margin-bottom: .8em;
 }
 
 .import-label {

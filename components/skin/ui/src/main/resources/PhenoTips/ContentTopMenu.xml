@@ -859,6 +859,8 @@
 ##
 #if ($doc.getObject('PhenoTips.PatientClass'))
 $xwiki.jsx.use('PhenoTips.ContentTopMenu')##
+$xwiki.jsx.use('PhenoTips.JSONImportDialog')##
+$xwiki.ssx.use('PhenoTips.JSONImportDialog')##
 (% id="patient-record-actions" class="content-actions page-actions" %)(((
 (% id="pr-more-actions-menu" class="menu menu-horizontal" %)(((
 #if ($xcontext.action == 'view')
@@ -896,6 +898,10 @@ $xwiki.jsx.use('PhenoTips.ContentTopMenu')##
 #if($isAdvancedUser)
 ** [[$services.localization.render('phenotips.contentTopMenu.moreActionsMenu.exportXAR')&gt;&gt;path:$doc.getURL('export', "format=xar&amp;name=${doc.fullName}&amp;pages=${doc.fullName}")|| class="export-link"]]
 ** [[$services.localization.render('phenotips.contentTopMenu.moreActionsMenu.exportJSON')&gt;&gt;path:$xwiki.getURL('PhenoTips.ExportPatient', 'get', "id=${escapetool.url($doc.documentReference.name)}&amp;outputSyntax=plain")|| class="export-link"]]
+#if ($hasEdit &amp;&amp; !$isReadOnly)
+** (% class="empty" %)----
+** (% class="json-import single-patient-import" %){{html clean="false"}}&lt;label&gt;&lt;input type="submit" value="$services.localization.render('phenotips.contentTopMenu.moreActionsMenu.importJSON')" name="single_patient_import"/&gt;&lt;/label&gt;{{/html}}
+#end
 #end
 #foreach ($e in $services.uix.getExtensions("org.phenotips.patientRecordMenu.moreActions"))
   #set ($extensionContent = $services.rendering.render($e.execute(), 'xhtml/1.0'))
