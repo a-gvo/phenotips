@@ -65,11 +65,11 @@ import com.google.common.collect.FluentIterable;
  * @since 1.3RC1
  */
 @Component
-@Named("org.phenotips.data.rest.internal.DefaultPatientsByExternalIdResourceImpl")
+@Named("org.phenotips.data.rest.internal.DefaultPatientsByExternalIdsResourceImpl")
 @Singleton
 public class DefaultPatientsByExternalIdsResourceImpl extends XWikiResource implements PatientsByExternalIdsResource
 {
-    /** Jackson object mapper to facilitate array serialization */
+    /** Jackson object mapper to facilitate array serialization. */
     private static final ObjectMapper OBJECT_MAPPER = getCustomObjectMapper();
 
 
@@ -99,8 +99,7 @@ public class DefaultPatientsByExternalIdsResourceImpl extends XWikiResource impl
         }
 
         this.logger.debug("Retrieving patient records with external IDs [{}] via REST", eids);
-        // Obtain all the relevant patient objects given a list of eIDs. This controls for duplicates, although there
-        // shouldn't be any.
+        // Obtain all the relevant patient objects given a list of eIDs.
         final Set<PrimaryEntity> patients = FluentIterable.from(eids)
             .filter(Predicates.<String>notNull())
             .transformAndConcat(getPatientLookupFunction())

@@ -34,7 +34,7 @@ import javax.ws.rs.core.Response;
  * Resource for working with multiple patient records, identified by their given "external" identifiers.
  *
  * @version $Id$
- * @since 1.3M4
+ * @since 1.3RC1
  */
 @Path("/patients/eid/{eids}")
 @Relation("https://phenotips.org/rel/patientRecord")
