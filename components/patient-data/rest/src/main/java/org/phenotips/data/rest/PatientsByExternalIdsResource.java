@@ -25,8 +25,8 @@ import java.util.List;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -36,7 +36,7 @@ import javax.ws.rs.core.Response;
  * @version $Id$
  * @since 1.3RC1
  */
-@Path("/patients/eid/{eids}")
+@Path("/patients/eids")
 @Relation("https://phenotips.org/rel/patientRecord")
 @ParentResource(PatientsResource.class)
 public interface PatientsByExternalIdsResource
@@ -46,11 +46,11 @@ public interface PatientsByExternalIdsResource
      * representation. If any of the indicated patient records don't exist, or if the user sending the request doesn't
      * have the right to view any of the target patient records, they are excluded from the search results.
      *
-     * @param eids list of patients' "external" identifiers, see {@link org.phenotips.data.Patient#getExternalId()}
+     * @param eids JSON list of patients' "external" identifiers, see {@link org.phenotips.data.Patient#getExternalId()}
      * @return JSON representations of the requested patients, or a status message in case of error
      */
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     @RequiredAccess("view")
-    Response getPatients(@PathParam("eids") final List<String> eids);
+    Response getPatients(@QueryParam("eids") final List<String> eids);
 }

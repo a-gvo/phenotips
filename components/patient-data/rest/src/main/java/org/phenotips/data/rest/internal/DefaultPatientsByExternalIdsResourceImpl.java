@@ -92,11 +92,19 @@ public class DefaultPatientsByExternalIdsResourceImpl extends XWikiResource impl
     @Override
     public Response getPatients(final List<String> eids)
     {
-        // Make sure that the input is not null.
         if (eids == null) {
             logger.warn("The list of external IDs is null");
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
+
+//        final List<String> eidList;
+//        try {
+//            eidList = OBJECT_MAPPER.readValue(eids, TypeFactory.defaultInstance()
+//                .constructCollectionType(List.class, String.class));
+//        } catch (IOException e) {
+//            logger.warn("Invalid input: {}", eids);
+//            return Response.status(Response.Status.BAD_REQUEST).build();
+//        }
 
         this.logger.debug("Retrieving patient records with external IDs [{}] via REST", eids);
         // Obtain all the relevant patient objects given a list of eIDs.

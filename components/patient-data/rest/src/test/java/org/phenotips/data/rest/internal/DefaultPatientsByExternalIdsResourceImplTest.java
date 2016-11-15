@@ -181,6 +181,8 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference1)).thenReturn(true);
 
         final Response response = this.component.getPatients(ImmutableList.of(this.eid1));
+//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).toString());
+
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertEquals(new JSONArray().put(this.patient1JSON).toString(), response.getEntity());
     }
@@ -203,6 +205,8 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference3)).thenReturn(true);
 
         final Response response = this.component.getPatients(ImmutableList.of(this.eid1, this.eid2));
+//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
+
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertEquals(new JSONArray().put(this.patient1JSON).put(this.patient2JSON).put(this.patient3JSON).toString(),
             response.getEntity());
@@ -226,6 +230,7 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference3)).thenReturn(true);
 
         final Response response = this.component.getPatients(ImmutableList.of(this.eid1, this.eid2));
+//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertEquals(new JSONArray().put(this.patient1JSON).put(this.patient3JSON).toString(), response.getEntity());
@@ -247,6 +252,7 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference3)).thenReturn(true);
 
         final Response response = this.component.getPatients(ImmutableList.of(this.eid1, this.eid2));
+//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertEquals(new JSONArray().put(this.patient1JSON).put(this.patient2JSON).put(this.patient3JSON).toString(),
@@ -262,6 +268,7 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(query.execute()).thenThrow(new QueryException("Exception when executing query", query, new XWikiException()));
 
         final Response response = this.component.getPatients(ImmutableList.of(this.eid1));
+//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
 
         verify(this.logger).warn("Failed to retrieve patient with external id [{}]: {}", this.eid1,
             "Exception when executing query. Query statement = [null]");
