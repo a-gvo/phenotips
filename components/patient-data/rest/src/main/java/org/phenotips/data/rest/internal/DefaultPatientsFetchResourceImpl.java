@@ -74,7 +74,6 @@ public class DefaultPatientsFetchResourceImpl extends XWikiResource implements P
     /** Jackson object mapper to facilitate array serialization. */
     private static final ObjectMapper OBJECT_MAPPER = getCustomObjectMapper();
 
-
     /** Logging helper object. */
     @Inject
     private Logger logger;
