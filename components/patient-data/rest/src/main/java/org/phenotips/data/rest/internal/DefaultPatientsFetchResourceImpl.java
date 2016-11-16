@@ -93,6 +93,9 @@ public class DefaultPatientsFetchResourceImpl extends XWikiResource implements P
     @Inject
     private Container container;
 
+    /** Function that returns an iterable containing the specified patient entity objects. */
+    private Function<Object, Iterable<PrimaryEntity>> patientFromEidLookupFunction = getPatientFromEidLookupFunction();
+
     @Override
     public Response fetchPatients()
     {
@@ -101,17 +104,17 @@ public class DefaultPatientsFetchResourceImpl extends XWikiResource implements P
         final List<String> ids = (List<String>) (List<?>) FluentIterable.from(this.container.getRequest()
             .getProperties("id")).filter(Predicates.notNull()).toList();
 
-        this.logger.debug("Retrieving patient records with external IDs [{}] via REST", eids);
+        this.logger.debug("Retrieving patient records with external IDs [{}] and patient IDs [{}] via REST", eids, ids);
 
         // Get a set of patients from the provided eid and/or id data.
         final Set<PrimaryEntity> patients = new HashSet<>();
 
         FluentIterable.from(eids)
             .filter(Predicates.notNull())
-            .transformAndConcat(getPatientFromEidLookupFunction())
+            .transformAndConcat(this.patientFromEidLookupFunction)
             .copyInto(patients);
 
-        FluentIterable.from(getMatchingPatientData(ids))
+        FluentIterable.from(getMatchingEntitiesFromPatientIds(ids))
             .copyInto(patients);
 
         try {
@@ -143,7 +146,7 @@ public class DefaultPatientsFetchResourceImpl extends XWikiResource implements P
                         + ".external_id = :eid", Query.XWQL);
                     q.bindValue("eid", eid);
                     final List<String> patientIds = q.execute();
-                    return getMatchingPatientData(patientIds);
+                    return getMatchingEntitiesFromPatientIds(patientIds);
                 } catch (final QueryException ex) {
                     logger.warn("Failed to retrieve patient with external id [{}]: {}", eid, ex.getMessage());
                 }
@@ -160,14 +163,14 @@ public class DefaultPatientsFetchResourceImpl extends XWikiResource implements P
      * @return an iterable containing patient entity objects
      */
     @Nonnull
-    private Iterable<PrimaryEntity> getMatchingPatientData(@Nonnull final List<String> patientIds)
+    private Iterable<PrimaryEntity> getMatchingEntitiesFromPatientIds(@Nonnull final List<String> patientIds)
     {
         return FluentIterable.from(patientIds).transform(new Function<String, PrimaryEntity>()
         {
             @Override
             public PrimaryEntity apply(final String patientId)
             {
-                return getPatientJSON(patientId);
+                return getPatientJsonFromId(patientId);
             }
         }).filter(Predicates.<PrimaryEntity>notNull());
     }
@@ -179,17 +182,18 @@ public class DefaultPatientsFetchResourceImpl extends XWikiResource implements P
      * @return the patient entity with the specified ID, if exists, null otherwise
      */
     @Nullable
-    private PrimaryEntity getPatientJSON(final String patientId)
+    private PrimaryEntity getPatientJsonFromId(final String patientId)
     {
         try {
             final PrimaryEntity patient = repository.get(patientId);
             final User currentUser = this.users.getCurrentUser();
-            // If the user has view rights, return the patient entity. Else return null.
-            if (this.access.hasAccess(Right.VIEW, currentUser == null ? null : currentUser.getProfileDocument(),
-                patient.getDocument())) {
+            // If user has view rights and patient with the provided id exists, return the patient. Else return null.
+            if (patient != null && this.access.hasAccess(Right.VIEW, currentUser == null ? null
+                    : currentUser.getProfileDocument(), patient.getDocument())) {
                 return patient;
             }
-            this.logger.debug("View access denied to user [{}] on patient record [{}]", currentUser, patientId);
+            this.logger.debug("Patient not found, or view access denied to user [{}] on patient record [{}]",
+                currentUser, patientId);
         } catch (final IllegalArgumentException ex) {
             logger.warn("Failed to retrieve patient with ID [{}]: {}", patientId, ex.getMessage());
         }
