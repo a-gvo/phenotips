@@ -19,10 +19,11 @@ package org.phenotips.data.rest.internal;
 
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientRepository;
-import org.phenotips.data.rest.PatientsByExternalIdsResource;
+import org.phenotips.data.rest.PatientsFetchResource;
 import org.phenotips.entities.PrimaryEntity;
 
 import org.xwiki.component.annotation.Component;
+import org.xwiki.container.Container;
 import org.xwiki.query.Query;
 import org.xwiki.query.QueryException;
 import org.xwiki.query.QueryManager;
@@ -34,6 +35,7 @@ import org.xwiki.users.UserManager;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -59,15 +61,15 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
 
 /**
- * Default implementation for {@link PatientsByExternalIdsResource} using XWiki's support for REST resources.
+ * Default implementation for {@link PatientsFetchResource} using XWiki's support for REST resources.
  *
  * @version $Id$
  * @since 1.3RC1
  */
 @Component
-@Named("org.phenotips.data.rest.internal.DefaultPatientsByExternalIdsResourceImpl")
+@Named("org.phenotips.data.rest.internal.DefaultPatientsFetchResourceImpl")
 @Singleton
-public class DefaultPatientsByExternalIdsResourceImpl extends XWikiResource implements PatientsByExternalIdsResource
+public class DefaultPatientsFetchResourceImpl extends XWikiResource implements PatientsFetchResource
 {
     /** Jackson object mapper to facilitate array serialization. */
     private static final ObjectMapper OBJECT_MAPPER = getCustomObjectMapper();
@@ -89,29 +91,29 @@ public class DefaultPatientsByExternalIdsResourceImpl extends XWikiResource impl
     @Inject
     private UserManager users;
 
-    @Override
-    public Response getPatients(final List<String> eids)
-    {
-        if (eids == null) {
-            logger.warn("The list of external IDs is null");
-            return Response.status(Response.Status.BAD_REQUEST).build();
-        }
+    @Inject
+    private Container container;
 
-//        final List<String> eidList;
-//        try {
-//            eidList = OBJECT_MAPPER.readValue(eids, TypeFactory.defaultInstance()
-//                .constructCollectionType(List.class, String.class));
-//        } catch (IOException e) {
-//            logger.warn("Invalid input: {}", eids);
-//            return Response.status(Response.Status.BAD_REQUEST).build();
-//        }
+    @Override
+    public Response fetchPatients()
+    {
+        final List<Object> eids = this.container.getRequest().getProperties("eid");
+        @SuppressWarnings("unchecked")
+        final List<String> ids = (List<String>) (List<?>) FluentIterable.from(this.container.getRequest()
+            .getProperties("id")).filter(Predicates.notNull()).toList();
 
         this.logger.debug("Retrieving patient records with external IDs [{}] via REST", eids);
-        // Obtain all the relevant patient objects given a list of eIDs.
-        final Set<PrimaryEntity> patients = FluentIterable.from(eids)
-            .filter(Predicates.<String>notNull())
-            .transformAndConcat(getPatientLookupFunction())
-            .toSet();
+
+        // Get a set of patients from the provided eid and/or id data.
+        final Set<PrimaryEntity> patients = new HashSet<>();
+
+        FluentIterable.from(eids)
+            .filter(Predicates.notNull())
+            .transformAndConcat(getPatientFromEidLookupFunction())
+            .copyInto(patients);
+
+        FluentIterable.from(getMatchingPatientData(ids))
+            .copyInto(patients);
 
         try {
             // Generate JSON for all retrieved patients.
@@ -130,12 +132,12 @@ public class DefaultPatientsByExternalIdsResourceImpl extends XWikiResource impl
      * @return an iterable containing all the relevant patient entity objects.
      */
     @Nonnull
-    private Function<String, Iterable<PrimaryEntity>> getPatientLookupFunction()
+    private Function<Object, Iterable<PrimaryEntity>> getPatientFromEidLookupFunction()
     {
-        return new Function<String, Iterable<PrimaryEntity>>()
+        return new Function<Object, Iterable<PrimaryEntity>>()
         {
             @Override
-            public Iterable<PrimaryEntity> apply(final String eid)
+            public Iterable<PrimaryEntity> apply(final Object eid)
             {
                 try {
                     final Query q = qm.createQuery("where doc.object(PhenoTips.PatientClass)"

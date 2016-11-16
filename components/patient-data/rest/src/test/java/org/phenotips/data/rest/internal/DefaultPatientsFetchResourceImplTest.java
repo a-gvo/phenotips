@@ -19,11 +19,13 @@ package org.phenotips.data.rest.internal;
 
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientRepository;
-import org.phenotips.data.rest.PatientsByExternalIdsResource;
+import org.phenotips.data.rest.PatientsFetchResource;
 
 import org.xwiki.component.manager.ComponentLookupException;
 import org.xwiki.component.manager.ComponentManager;
 import org.xwiki.component.util.ReflectionUtils;
+import org.xwiki.container.Container;
+import org.xwiki.container.Request;
 import org.xwiki.context.Execution;
 import org.xwiki.context.ExecutionContext;
 import org.xwiki.model.reference.DocumentReference;
@@ -38,6 +40,9 @@ import org.xwiki.users.User;
 import org.xwiki.users.UserManager;
 
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
@@ -63,11 +68,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class DefaultPatientsByExternalIdsResourceImplTest
+public class DefaultPatientsFetchResourceImplTest
 {
     @Rule
-    public final MockitoComponentMockingRule<PatientsByExternalIdsResource> mocker =
-        new MockitoComponentMockingRule<PatientsByExternalIdsResource>(DefaultPatientsByExternalIdsResourceImpl.class);
+    public final MockitoComponentMockingRule<PatientsFetchResource> mocker =
+        new MockitoComponentMockingRule<PatientsFetchResource>(DefaultPatientsFetchResourceImpl.class);
 
     @Mock
     private Patient patient1;
@@ -90,11 +95,13 @@ public class DefaultPatientsByExternalIdsResourceImplTest
     @Mock
     private Logger logger;
 
+    private Container container;
+
     private QueryManager qm;
 
     private AuthorizationManager access;
 
-    private DefaultPatientsByExternalIdsResourceImpl component;
+    private DefaultPatientsFetchResourceImpl component;
 
     private final String eid1 = "eid1";
 
@@ -128,8 +135,9 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         final PatientRepository repository = this.mocker.getInstance(PatientRepository.class);
         this.qm = this.mocker.getInstance(QueryManager.class);
         this.access = this.mocker.getInstance(AuthorizationManager.class);
+        this.container = this.mocker.getInstance(Container.class);
         final UserManager users = this.mocker.getInstance(UserManager.class);
-        this.component = (DefaultPatientsByExternalIdsResourceImpl) this.mocker.getComponentUnderTest();
+        this.component = (DefaultPatientsFetchResourceImpl) this.mocker.getComponentUnderTest();
         this.logger = this.mocker.getMockedLogger();
         ReflectionUtils.setFieldValue(this.component, "uriInfo", this.uriInfo);
 
@@ -161,18 +169,30 @@ public class DefaultPatientsByExternalIdsResourceImplTest
     }
 
     @Test
-    public void getPatientsWithNullEidsReturnsBadRequestCode() throws ComponentLookupException
+    public void getPatientsWithEmptyEidAndId() throws ComponentLookupException
     {
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference1)).thenReturn(false);
+        final Request request = mock(Request.class);
+        doReturn(request).when(this.container).getRequest();
+        doReturn(Collections.emptyList()).when(request).getProperties("eid");
+        doReturn(Collections.emptyList()).when(request).getProperties("id");
 
-        final Response response = this.component.getPatients(null);
-        verify(this.logger).warn("The list of external IDs is null");
-        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+        final Response response = this.component.fetchPatients();
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals("[]", response.getEntity());
     }
 
     @Test
     public void getPatientsPerformsCorrectlyOnePatientRecord() throws ComponentLookupException, QueryException
     {
+        final List<Object> eidList = new ArrayList<>();
+        eidList.add(this.eid1);
+
+        final Request request = mock(Request.class);
+        doReturn(request).when(this.container).getRequest();
+        doReturn(eidList).when(request).getProperties("eid");
+        doReturn(Collections.emptyList()).when(request).getProperties("id");
+
         final Query query = mock(DefaultQuery.class);
         when(this.patient1.toJSON()).thenReturn(this.patient1JSON);
         when(this.qm.createQuery(Matchers.anyString(), Matchers.anyString())).thenReturn(query);
@@ -180,8 +200,7 @@ public class DefaultPatientsByExternalIdsResourceImplTest
 
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference1)).thenReturn(true);
 
-        final Response response = this.component.getPatients(ImmutableList.of(this.eid1));
-//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).toString());
+        final Response response = this.component.fetchPatients();
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertEquals(new JSONArray().put(this.patient1JSON).toString(), response.getEntity());
@@ -191,6 +210,15 @@ public class DefaultPatientsByExternalIdsResourceImplTest
     public void getPatientsPerformsCorrectlySeveralPatientRecordsAccessToAll() throws ComponentLookupException,
         QueryException
     {
+        final List<Object> eidList = new ArrayList<>();
+        eidList.add(this.eid1);
+        eidList.add(this.eid2);
+
+        final Request request = mock(Request.class);
+        doReturn(request).when(this.container).getRequest();
+        doReturn(eidList).when(request).getProperties("eid");
+        doReturn(Collections.emptyList()).when(request).getProperties("id");
+
         final Query query = mock(DefaultQuery.class);
         when(this.patient1.toJSON()).thenReturn(this.patient1JSON);
         when(this.patient2.toJSON()).thenReturn(this.patient2JSON);
@@ -204,11 +232,10 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference2)).thenReturn(true);
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference3)).thenReturn(true);
 
-        final Response response = this.component.getPatients(ImmutableList.of(this.eid1, this.eid2));
-//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
+        final Response response = this.component.fetchPatients();
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        assertEquals(new JSONArray().put(this.patient1JSON).put(this.patient2JSON).put(this.patient3JSON).toString(),
+        assertEquals(new JSONArray().put(this.patient3JSON).put(this.patient2JSON).put(this.patient1JSON).toString(),
             response.getEntity());
     }
 
@@ -216,6 +243,15 @@ public class DefaultPatientsByExternalIdsResourceImplTest
     public void getPatientsPerformsCorrectlySeveralPatientRecordsAccessToSome() throws ComponentLookupException,
         QueryException
     {
+        final List<Object> eidList = new ArrayList<>();
+        eidList.add(this.eid1);
+        eidList.add(this.eid2);
+
+        final Request request = mock(Request.class);
+        doReturn(request).when(this.container).getRequest();
+        doReturn(eidList).when(request).getProperties("eid");
+        doReturn(Collections.emptyList()).when(request).getProperties("id");
+
         final Query query = mock(DefaultQuery.class);
         when(this.patient1.toJSON()).thenReturn(this.patient1JSON);
         when(this.patient2.toJSON()).thenReturn(this.patient2JSON);
@@ -229,16 +265,24 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference2)).thenReturn(false);
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference3)).thenReturn(true);
 
-        final Response response = this.component.getPatients(ImmutableList.of(this.eid1, this.eid2));
-//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
+        final Response response = this.component.fetchPatients();
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        assertEquals(new JSONArray().put(this.patient1JSON).put(this.patient3JSON).toString(), response.getEntity());
+        assertEquals(new JSONArray().put(this.patient3JSON).put(this.patient1JSON).toString(), response.getEntity());
     }
 
     @Test
     public void getPatientsPerformsCorrectlyOnePatientIdDoesNotExist() throws ComponentLookupException, QueryException
     {
+        final List<Object> eidList = new ArrayList<>();
+        eidList.add(this.eid1);
+        eidList.add(this.eid2);
+
+        final Request request = mock(Request.class);
+        doReturn(request).when(this.container).getRequest();
+        doReturn(eidList).when(request).getProperties("eid");
+        doReturn(Collections.emptyList()).when(request).getProperties("id");
+
         final Query query = mock(DefaultQuery.class);
         when(this.patient1.toJSON()).thenReturn(this.patient1JSON);
         when(this.patient2.toJSON()).thenReturn(this.patient2JSON);
@@ -251,24 +295,29 @@ public class DefaultPatientsByExternalIdsResourceImplTest
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference2)).thenReturn(true);
         when(this.access.hasAccess(Right.VIEW, this.userReference, this.patientReference3)).thenReturn(true);
 
-        final Response response = this.component.getPatients(ImmutableList.of(this.eid1, this.eid2));
-//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
+        final Response response = this.component.fetchPatients();
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        assertEquals(new JSONArray().put(this.patient1JSON).put(this.patient2JSON).put(this.patient3JSON).toString(),
+        assertEquals(new JSONArray().put(this.patient3JSON).put(this.patient2JSON).put(this.patient1JSON).toString(),
             response.getEntity());
     }
 
     @Test
     public void getPatientsPerformsCorrectlyIfWrongExternalId() throws ComponentLookupException, QueryException
     {
+        final List<Object> eidList = new ArrayList<>();
+        eidList.add(this.eid1);
+
+        final Request request = mock(Request.class);
+        doReturn(request).when(this.container).getRequest();
+        doReturn(eidList).when(request).getProperties("eid");
+        doReturn(Collections.emptyList()).when(request).getProperties("id");
         final Query query = mock(DefaultQuery.class);
 
         when(this.qm.createQuery(Matchers.anyString(), Matchers.anyString())).thenReturn(query);
         when(query.execute()).thenThrow(new QueryException("Exception when executing query", query, new XWikiException()));
 
-        final Response response = this.component.getPatients(ImmutableList.of(this.eid1));
-//        final Response response = this.component.getPatients(new JSONArray().put(this.eid1).put(this.eid2).toString());
+        final Response response = this.component.fetchPatients();
 
         verify(this.logger).warn("Failed to retrieve patient with external id [{}]: {}", this.eid1,
             "Exception when executing query. Query statement = [null]");
