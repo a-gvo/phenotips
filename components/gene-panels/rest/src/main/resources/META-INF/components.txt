@@ -1,0 +1,2 @@
+org.phenotips.panels.rest.internal.DefaultGenePanelsPatientResourceImpl
+org.phenotips.panels.rest.internal.DefaultGenePanelsResourceImpl
