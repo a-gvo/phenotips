@@ -126,39 +126,77 @@
     'size' : 0,
     'resultsToShow' : 6,
     'page' : 1,
+    'startPageParam' : '&amp;startPage=',
+    'numResultsParam' : '&amp;numResults=',
+    'reqNoParam' : "&amp;reqNo=",
 
     /**
      * Generates results for the first page based on new data provided.
-     * @param data the data, as json, that needs to be displayed
-     * @param size the size of the data
+     * @param queryString the incomplete query string, containing only the phenotype information
+     * @param page the page number to render
      * @param resultsToShow the number of results to show; uses the default value if null
      */
-    paginate : function(data, size, resultsToShow) {
-      if (!data || !size) {
-        // Empty the results container, and hide section objects.
-        this.resultsContainer.update(' ');
-        this.parentContainer.__hiddenParent &amp;&amp; this.parentContainer.__hiddenParent.addClassName('hidden');
+    paginate : function(queryString, page, resultsToShow) {
+      this.requestPageData(queryString, page, resultsToShow)
+    },
+
+    requestPageData : function(queryStr, page, resultsToShow) {
+      var _this = this;
+      this.page = page;
+      resultsToShow &amp;&amp; (this.resultsToShow = resultsToShow);
+
+      if (queryStr === this.service.script) {
+        this.updateDataContainer(null);
         return;
       }
-      // If no preferred number of results to display was selected, use default.
-      resultsToShow &amp;&amp; (this.resultsToShow = resultsToShow);
-      // Reset the page and data values.
-      this.page = 1;
-      this.size = size;
-      this.totalPages = Math.ceil(this.size/this.resultsToShow);
-      this.data = data;
+
+      this.queryString = queryStr;
+
+      var query = [this.queryString,
+        this.startPageParam,
+        this.page,
+        this.numResultsParam,
+        this.resultsToShow,
+        this.reqNoParam,
+        ++this.service.expectedReqNo].join("");
+
+      new Ajax.Request(query, {
+        method : 'GET',
+        onCreate : function() {
+          _this.service.target.addClassName('loading');
+        },
+        onSuccess : function(response) {
+          _this.updateDataContainer(response.responseJSON);
+        },
+        onComplete : function() {
+          _this.service.target.removeClassName('loading');
+        }
+      });
+    },
+
+    updateDataContainer : function(json) {
+      if (!json || json.reqNo != this.service.expectedReqNo || !json.genes || !json.size) {
+        // Empty the results service, and hide section objects.
+        this.resultsContainer.update(' ');
+        this.service.target.__hiddenParent &amp;&amp; this.service.target.__hiddenParent.addClassName('hidden');
+        return;
+      }
+      // Reset the data values.
+      this.size = json.size;
+      this.totalPages = json.totalPages;
+      this.data = json.genes;
       // Generate the results page
-      this.generatePartialResults();
-      this.parentContainer.__hiddenParent &amp;&amp; this.parentContainer.__hiddenParent.removeClassName('hidden');
+      this.renderResults();
+      this.service.target.__hiddenParent &amp;&amp; this.service.target.__hiddenParent.removeClassName('hidden');
     },
 
     /**
      * Creates results for a calculated range of indexes.
      */
-    generatePartialResults : function() {
+    renderResults : function() {
       this.setDataRanges();
       var container = new Element('ul');
-      for (var i = this.from; i &lt;= this.to; i++) {
+      for (var i = 0; i &lt;= this.size - 1; i++) {
         var geneRow = this.buildGeneRow(this.data[i]);
         container.insert(geneRow);
       }
@@ -190,8 +228,8 @@
         .insert(geneIdElem)
         .insert(countElem);
 
-      if (typeof(this._tooltip) != 'undefined') {
-        var icon = new Element('span', {'class' : 'xHelpButton fa fa-info-circle ' + this._tooltip, 'title' : geneName});
+      if (typeof(this.service.tooltip) != 'undefined') {
+        var icon = new Element('span', {'class' : 'xHelpButton fa fa-info-circle ' + this.service.tooltip, 'title' : geneName});
         new PhenoTips.widgets.HelpButton(icon);
         geneRow.insert(icon);
       }
@@ -227,29 +265,22 @@
      */
     setDataRanges : function()
     {
-      // Calculate to and from
-      this.from = (this.page - 1) * this.resultsToShow;
-      this.to = this.from + this.resultsToShow - 1;
-      
-      if (this.from > 0) {
+      if (this.page &gt; 1) {
         this.prevArrow.removeClassName('hidden');
         this.toFirst.removeClassName('hidden');
       } else {
         this.prevArrow.addClassName('hidden');
         this.toFirst.addClassName('hidden');
       }
-      
-      if (this.to &lt; (this.size - 1)) {
+
+      if (this.page &lt; this.totalPages) {
         this.nextArrow.removeClassName('hidden');
         this.toLast.removeClassName('hidden');
       } else {
         this.nextArrow.addClassName('hidden');
         this.toLast.addClassName('hidden');
       }
-      
-      if (this.to > this.size - 1) {
-        this.to = this.size - 1;
-      }
+
       var pageCount = "$escapetool.javascript($services.localization.render('phenotips.panels.panelsDisplay.pageCount'))";
       pageCount = pageCount.replace(/___number___/g, this.page).replace(/___total___/g, this.totalPages);
       this.curPage.update(pageCount);
@@ -271,8 +302,8 @@
         .insert(this.curPage)
         .insert(this.nextArrow)
         .insert(this.toLast);
-      this.parentContainer.insert(this.resultsContainer);
-      this.parentContainer.insert(this.pageSwitcher);
+      this.service.target.insert(this.resultsContainer);
+      this.service.target.insert(this.pageSwitcher);
       this.attachNavigationListeners();
       this.attachDownloadListeners();
     },
@@ -284,22 +315,26 @@
       var _this = this;
       this.prevArrow.observe('click', function() {
         _this.page--;
-        _this.generatePartialResults();
+        _this.requestPageData(_this.queryString, _this.page, _this.resultsToShow);
+        _this.renderResults();
       });
 
       this.nextArrow.observe('click', function() {
         _this.page++;
-        _this.generatePartialResults();
+        _this.requestPageData(_this.queryString, _this.page, _this.resultsToShow);
+        _this.renderResults();
       });
-      
+
       this.toFirst.observe('click', function() {
         _this.page = 1;
-        _this.generatePartialResults();
-      });  
-      
+        _this.requestPageData(_this.queryString, _this.page, _this.resultsToShow);
+        _this.renderResults();
+      });
+
       this.toLast.observe('click', function() {
         _this.page = _this.totalPages;
-        _this.generatePartialResults();
+        _this.requestPageData(_this.queryString, _this.page, _this.resultsToShow);
+        _this.renderResults();
       });
     },
 
@@ -307,22 +342,19 @@
       var _this = this;
       this.saveButton &amp;&amp; this.saveButton.observe('click', function(event) {
         event.stop();
-        console.log("i clicked");
-        Event.fire(document, 'panels:download:requested', {'data' : _this.data, 'size' : _this.size});
+        Event.fire(document, 'panels:export:requested', {'query' : _this.queryString, 'service' : _this.service});
       });
     },
 
     /**
      * Creates the results containers inside of the specified parent container.
      *
-     * @param parentContainer the parent container that will contain the paginated results
-     * @param tooltip for each of the result entries
+     * @param service the search service linking to all the relevant data objects
      * @param saveButton for the data
      */
-    initialize : function(parentContainer, tooltip, saveButton) {
-      if (!parentContainer) {return;}
-      this.parentContainer = parentContainer;
-      this._tooltip = tooltip;
+    initialize : function(service, saveButton) {
+      if (!service) {return;}
+      this.service = service;
       this.saveButton = saveButton;
       this.createResultsContainers();
     }
