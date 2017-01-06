@@ -17,10 +17,14 @@
  */
 package org.phenotips.vocabulary.internal.solr;
 
+import org.phenotips.vocabulary.VocabularyTerm;
+
 import org.xwiki.component.annotation.Component;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
@@ -29,9 +33,18 @@ import javax.inject.Named;
 import javax.inject.Singleton;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.solr.client.solrj.util.ClientUtils;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.DisMaxParams;
+import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.SpellingParams;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.hp.hpl.jena.ontology.IntersectionClass;
 import com.hp.hpl.jena.ontology.OntClass;
@@ -66,6 +79,8 @@ public class Orphanet extends AbstractOWLSolrVocabulary
     private static final String ON_PROPERTY_LABEL = "onProperty";
 
     private Set<OntClass> hierarchyRoots;
+
+    private Map<String, String> staticSolrParams;
 
     @Override
     public String getIdentifier()
@@ -409,5 +424,98 @@ public class Orphanet extends AbstractOWLSolrVocabulary
     String getFormattedOntClassId(@Nullable final String localName)
     {
         return StringUtils.isNotBlank(localName) ? localName.replace("Orphanet_", "") : null;
+    }
+
+    @Override
+    public List<VocabularyTerm> search(@Nullable final String input, final int maxResults, @Nullable final String sort,
+        @Nullable final String customFilter)
+    {
+        return StringUtils.isBlank(input)
+            ? Collections.<VocabularyTerm>emptyList()
+            : searchMatches(input, maxResults, sort, customFilter);
+    }
+
+    /**
+     * Searches for matches to the input string.
+     *
+     * @param input string to match
+     * @param maxResults the maximum number of results
+     * @param sort the optional sort parameter
+     * @param customFilter custom filter for results
+     * @return a list of matching {@link VocabularyTerm} objects; empty if no suitable matches found
+     */
+    private List<VocabularyTerm> searchMatches(@Nonnull final String input, final int maxResults,
+        @Nullable final String sort, @Nullable final String customFilter)
+    {
+        final ImmutableMap.Builder<String, String> optionsBuilder = ImmutableMap.builder();
+        addStaticSolrParams(optionsBuilder);
+        addStaticFieldSolrParams(optionsBuilder);
+
+        final ImmutableList.Builder<VocabularyTerm> resultBuilder = ImmutableList.builder();
+
+        for (SolrDocument doc : search(produceDynamicSolrParams(input, maxResults, sort, customFilter),
+            optionsBuilder.build())) {
+            resultBuilder.add(new SolrVocabularyTerm(doc, this));
+        }
+
+        return resultBuilder.build();
+    }
+
+    /**
+     * Produces dynamic Solr parameters.
+     *
+     * @param rawQuery unprocessed query string
+     * @param rows the maximum number of items to search
+     * @param sort the optional sort parameter
+     * @param customFq custom filter for the results
+     * @return a {@link SolrParams} object
+     */
+    private SolrParams produceDynamicSolrParams(@Nonnull final String rawQuery, final Integer rows,
+        @Nullable final String sort, @Nullable final String customFq)
+    {
+        final String query = rawQuery.trim();
+        final ModifiableSolrParams params = new ModifiableSolrParams();
+        final String escapedQuery = ClientUtils.escapeQueryChars(query);
+        params.add(CommonParams.FQ,
+            StringUtils.defaultIfBlank(customFq, "-(nameSort:\\** nameSort:\\+* nameSort:\\^*)"));
+        params.add(CommonParams.Q, escapedQuery);
+        params.add(SpellingParams.SPELLCHECK_Q, query);
+        final String lastWord = StringUtils.defaultIfBlank(StringUtils.substringAfterLast(escapedQuery, " "),
+            escapedQuery) + "*";
+
+        params.add(DisMaxParams.BQ,
+            String.format("nameSpell:%1$s^20 keywords:%1$s^2 text:%1$s^1 textSpell:%1$s^2", lastWord));
+        params.add(CommonParams.ROWS, rows.toString());
+        if (StringUtils.isNotBlank(sort)) {
+            params.add(CommonParams.SORT, sort);
+        }
+        return params;
+    }
+
+    /**
+     * Adds static field parameters to the parameters builder.
+     * @param paramBuilder the builder for search parameters
+     */
+    private void addStaticFieldSolrParams(@Nonnull final ImmutableMap.Builder<String, String> paramBuilder)
+    {
+        paramBuilder.put(DisMaxParams.PF, "name^40 nameSpell^70 alternative_term^15 alternative_termSpell^25 def^15 "
+            + "defSpell^25 text^3 textSpell^5");
+        paramBuilder.put(DisMaxParams.QF,
+            "name^10 nameSpell^18 alternative_term^6 alternative_termSpell^10 def^6 defSpell^10 text^1 textSpell^2");
+    }
+
+    /**
+     * Adds static Solr parameters to the parameters builder.
+     *
+     * @param paramBuilder the builder for search parameters
+     */
+    private void addStaticSolrParams(@Nonnull final ImmutableMap.Builder<String, String> paramBuilder)
+    {
+        paramBuilder.put("spellcheck", Boolean.toString(true));
+        paramBuilder.put(SpellingParams.SPELLCHECK_COLLATE, Boolean.toString(true));
+        paramBuilder.put(SpellingParams.SPELLCHECK_COUNT, "100");
+        paramBuilder.put(SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "3");
+        paramBuilder.put("lowercaseOperators", Boolean.toString(false));
+        paramBuilder.put("defType", "edismax");
     }
 }
