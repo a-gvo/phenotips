@@ -17,643 +17,565 @@
  */
 package org.phenotips.panels.internal;
 
+import org.phenotips.data.Feature;
+import org.phenotips.data.Patient;
 import org.phenotips.panels.GenePanel;
-import org.phenotips.panels.PhenotypesForGene;
+import org.phenotips.panels.GenePanelFactory;
+import org.phenotips.panels.TermsForGene;
 import org.phenotips.vocabulary.Vocabulary;
 import org.phenotips.vocabulary.VocabularyManager;
 import org.phenotips.vocabulary.VocabularyTerm;
-import org.phenotips.vocabulary.internal.GeneNomenclature;
-import org.phenotips.vocabulary.internal.solr.HumanPhenotypeOntology;
 
 import org.xwiki.component.manager.ComponentLookupException;
+import org.xwiki.test.mockito.MockitoComponentMockingRule;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-
+import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link DefaultGenePanelImpl}.
  *
  * @version $Id$
- * @since 1.3M5
+ * @since 1.3M6
  */
 public class DefaultGenePanelImplTest
 {
-    private DefaultGenePanelImpl genePanel;
+    private static final String HPO_TERM1 = "HP:001";
 
-    private Vocabulary hgnc;
+    private static final String HPO_TERM2 = "HP:002";
+
+    private static final String HPO_TERM3 = "HP:003";
+
+    private static final String GENE1 = "gene1";
+
+    private static final String GENE2 = "gene2";
+
+    private static final String GENE3 = "gene3";
+
+    private static final String GENE_ID1 = "gene-id1";
+
+    private static final String GENE_ID2 = "gene-id2";
+
+    private static final List<Object> GENE_ID_LIST1 = Collections.<Object>singletonList(GENE_ID1);
+
+    private static final List<Object> GENE_ID_LIST2 = Collections.<Object>singletonList(GENE_ID2);
+
+    private static final String ASSOCIATED_GENES = "associated_genes";
+
+    private static final String ENSEMBL_ID = "ensembl_gene_id";
+
+    private static final String HPO_LABEL = "hpo";
+
+    private static final String HGNC_LABEL = "hgnc";
+
+    private static final String SIZE_LABEL = "size";
+
+    private static final String GENES_LABEL = "genes";
+
+    private static final String TERMS_LABEL = "terms";
+
+    private static final String GENE_SYMBOL_LABEL = "gene_symbol";
+
+    private static final String GENE_ID_LABEL = "gene_id";
+
+    private static final String COUNT_LABEL = "count";
+
+    private static final String ID_LABEL = "id";
+
+    @Rule
+    public MockitoComponentMockingRule<GenePanelFactory> mocker =
+        new MockitoComponentMockingRule<GenePanelFactory>(DefaultGenePanelFactoryImpl.class);
+
+    private GenePanelFactory genePanelFactory;
 
     private Vocabulary hpo;
 
-    private VocabularyTerm term1 = mock(VocabularyTerm.class);
+    private Vocabulary hgnc;
 
-    private VocabularyTerm term2 = mock(VocabularyTerm.class);
+    private Patient patient;
 
-    private VocabularyTerm term3 = mock(VocabularyTerm.class);
+    private List<VocabularyTerm> presentTerms;
 
-    private VocabularyTerm geneA = mock(VocabularyTerm.class);
-    private VocabularyTerm geneB = mock(VocabularyTerm.class);
-    private VocabularyTerm geneC = mock(VocabularyTerm.class);
-    private VocabularyTerm geneD = mock(VocabularyTerm.class);
-    private VocabularyTerm geneE = mock(VocabularyTerm.class);
+    private List<VocabularyTerm> absentTerms;
+
+    private GenePanel patientGenePanel;
+
+    private GenePanel presentTermsGenePanel;
+
+    private GenePanel termsGenePanel;
+
+    private VocabularyTerm presentTerm1;
+
+    private VocabularyTerm presentTerm2;
+
+    private JSONObject termsForGeneJSON1;
+
+    private JSONObject termsForGeneJSON2;
+
+    private JSONObject termsForGeneJSON3;
+
+    private JSONObject expectedJSON;
 
     @Before
     public void setUp() throws ComponentLookupException
     {
         MockitoAnnotations.initMocks(this);
-        VocabularyManager vocabularyManager = mock(VocabularyManager.class);
-        this.hgnc = mock(GeneNomenclature.class);
-        this.hpo = mock(HumanPhenotypeOntology.class);
+        this.genePanelFactory = this.mocker.getComponentUnderTest();
+        final VocabularyManager vocabularyManager = this.mocker.getInstance(VocabularyManager.class);
+        this.hpo = mock(Vocabulary.class);
+        this.hgnc = mock(Vocabulary.class);
 
-        doReturn(this.hgnc).when(vocabularyManager).getVocabulary("hgnc");
-        doReturn(this.hpo).when(vocabularyManager).getVocabulary("hpo");
+        when(vocabularyManager.getVocabulary(HPO_LABEL)).thenReturn(this.hpo);
+        when(vocabularyManager.getVocabulary(HGNC_LABEL)).thenReturn(this.hgnc);
 
-        this.genePanel = new DefaultGenePanelImpl(Collections.<String>emptyList(), vocabularyManager);
+        makeGenePanelMocks();
+        makeExpectedTermsForGeneJSON();
+
+        this.patientGenePanel = this.genePanelFactory.build(this.patient);
+        this.termsGenePanel = this.genePanelFactory.build(Collections.unmodifiableList(this.presentTerms),
+            Collections.unmodifiableList(this.absentTerms));
+        this.presentTermsGenePanel = this.genePanelFactory.build(Collections.unmodifiableList(this.presentTerms),
+            Collections.<VocabularyTerm>emptyList());
+    }
+
+    //---------------------------------Gene panel from patient---------------------------------//
+
+    @Test
+    public void confirmPanelIsEmptyIfEmptyPatient()
+    {
+        final GenePanel panel = this.genePanelFactory.build(mock(Patient.class));
+        assertEquals(0, panel.size());
+        assertEquals(Collections.<VocabularyTerm>emptySet(), panel.getPresentTerms());
+        assertEquals(Collections.<VocabularyTerm>emptySet(), panel.getAbsentTerms());
+        assertEquals(Collections.<TermsForGene>emptyList(), panel.getTermsForGeneList());
+
+        final JSONObject expectedJSON = new JSONObject().put(SIZE_LABEL, 0).put(GENES_LABEL, new JSONArray());
+        assertTrue(expectedJSON.similar(panel.toJSON()));
     }
 
     @Test
-    public void getGeneDataFromTermNoAssociatedGenes()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void testGetPresentTermsForPatientObjectThatOnlyHasFeatureData()
     {
-        final VocabularyTerm vocabularyTerm = mock(VocabularyTerm.class);
-        doReturn(null).when(vocabularyTerm).get("associated_genes");
-
-        final Method getGeneDataFromTerm = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneDataFromTerm",
-            VocabularyTerm.class);
-        getGeneDataFromTerm.setAccessible(true);
-
-        final Object responseObject = getGeneDataFromTerm.invoke(this.genePanel, vocabularyTerm);
-        assertEquals(Collections.<String>emptyList(), responseObject);
+        assertEquals(new HashSet<>(this.presentTerms), this.patientGenePanel.getPresentTerms());
     }
 
     @Test
-    public void getGeneDataFromTermEmptyAssociatedGenesList()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void testGetAbsentTermsForPatientObjectThatOnlyHasFeatureData()
     {
-        final VocabularyTerm vocabularyTerm = mock(VocabularyTerm.class);
-        doReturn(Collections.<String>emptyList()).when(vocabularyTerm).get("associated_genes");
-
-        final Method getGeneDataFromTerm = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneDataFromTerm",
-            VocabularyTerm.class);
-        getGeneDataFromTerm.setAccessible(true);
-
-        final Object responseObject = getGeneDataFromTerm.invoke(this.genePanel, vocabularyTerm);
-        assertEquals(Collections.<String>emptyList(), responseObject);
+        assertEquals(new HashSet<>(this.absentTerms), this.patientGenePanel.getAbsentTerms());
     }
 
     @Test
-    public void getGeneDataFromTermGeneDataExists()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void testGetTermsForGeneListForPatientObjectThatOnlyHasFeatureData()
     {
-        final List<String> geneList = ImmutableList.of("gene1", "gene2");
-        final VocabularyTerm vocabularyTerm = mock(VocabularyTerm.class);
-        doReturn(geneList).when(vocabularyTerm).get("associated_genes");
+        final List<TermsForGene> termsForGeneList = this.patientGenePanel.getTermsForGeneList();
+        assertEquals(3, termsForGeneList.size());
 
-        final Method getGeneDataFromTerm = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneDataFromTerm",
-            VocabularyTerm.class);
-        getGeneDataFromTerm.setAccessible(true);
+        // The first term should be "gene2", since it has the most number of appearances.
+        assertEquals(GENE2, termsForGeneList.get(0).getGeneSymbol());
+        assertEquals(GENE_ID2, termsForGeneList.get(0).getGeneId());
 
-        final Object responseObject = getGeneDataFromTerm.invoke(this.genePanel, vocabularyTerm);
-        assertEquals(ImmutableList.of("gene1", "gene2"), responseObject);
+        // "gene2" should appear in two terms.
+        assertEquals(2, termsForGeneList.get(0).getCount());
+
+        // "gene2" should be associated with both present terms.
+        final Set<VocabularyTerm> terms1 = new HashSet<>();
+        terms1.add(this.presentTerm1);
+        terms1.add(this.presentTerm2);
+        assertEquals(terms1, termsForGeneList.get(0).getTerms());
+
+        // test expected json for "gene2" TermsForGene object.
+        assertTrue(this.termsForGeneJSON1.similar(termsForGeneList.get(0).toJSON()));
+
+
+        // The second term should be "gene1", since it appears only one time, and comes ahead of "gene3" w.r.t. natural
+        // order of its first associated phenotype.
+        assertEquals(GENE1, termsForGeneList.get(1).getGeneSymbol());
+        assertEquals(GENE_ID1, termsForGeneList.get(1).getGeneId());
+
+        // "gene1" should appear in one term.
+        assertEquals(1, termsForGeneList.get(1).getCount());
+
+        // "gene1" should be associated with first present term.
+        final Set<VocabularyTerm> terms2 = new HashSet<>();
+        terms2.add(this.presentTerm1);
+        assertEquals(terms2, termsForGeneList.get(1).getTerms());
+
+        // test expected json for "gene1" TermsForGene object.
+        assertTrue(this.termsForGeneJSON2.similar(termsForGeneList.get(1).toJSON()));
+
+
+        // The third term should be "gene3", since it appears only one time, and comes after of "gene1" w.r.t. natural
+        // order of its first associated phenotype.
+        assertEquals(GENE3, termsForGeneList.get(2).getGeneSymbol());
+        assertEquals(GENE3, termsForGeneList.get(2).getGeneId());
+
+        // "gene3" should appear in one term.
+        assertEquals(1, termsForGeneList.get(2).getCount());
+
+        // "gene3" should be associated with second present term.
+        final Set<VocabularyTerm> terms3 = new HashSet<>();
+        terms3.add(this.presentTerm2);
+        assertEquals(terms3, termsForGeneList.get(2).getTerms());
+
+        // test expected json for "gene3" TermsForGene object.
+        assertTrue(this.termsForGeneJSON3.similar(termsForGeneList.get(2).toJSON()));
     }
 
     @Test
-    public void getGeneIdGeneSymbolEmptyString()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException, NoSuchFieldException
+    public void testToJSONForPatientObjectThatOnlyHasFeatureData()
     {
-        // Empty string should not be passed to to getGeneId
-        final Method getGeneId = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneId", String.class);
-        getGeneId.setAccessible(true);
+        assertTrue(this.expectedJSON.similar(this.patientGenePanel.toJSON()));
+    }
 
-        final String geneSymbol = "";
 
-        doReturn(null).when(this.hgnc).getTerm(geneSymbol);
+    @Test
+    public void testSizeForPatientObjectThatOnlyHasFeatureData()
+    {
+        assertEquals(3, this.patientGenePanel.size());
+    }
 
-        final Object responseObject = getGeneId.invoke(this.genePanel, geneSymbol);
-        assertEquals("", responseObject);
+    //----------------------------------Gene panel from terms----------------------------------//
+
+    @Test
+    public void confirmPanelIsEmptyIfEmptyTerms()
+    {
+        final GenePanel panel = this.genePanelFactory.build(Collections.<VocabularyTerm>emptyList(),
+            Collections.<VocabularyTerm>emptyList());
+        assertEquals(0, panel.size());
+        assertEquals(Collections.<VocabularyTerm>emptySet(), panel.getPresentTerms());
+        assertEquals(Collections.<VocabularyTerm>emptySet(), panel.getAbsentTerms());
+        assertEquals(Collections.<TermsForGene>emptyList(), panel.getTermsForGeneList());
+
+        final JSONObject expectedJSON = new JSONObject().put(SIZE_LABEL, 0).put(GENES_LABEL, new JSONArray());
+        assertTrue(expectedJSON.similar(panel.toJSON()));
     }
 
     @Test
-    public void getGeneIdGeneSymbolInvalid()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException, NoSuchFieldException
+    public void confirmPanelIsCorrectIfNonEmptyAbsentTermsAndEmptyPresentTerms()
     {
-        final Method getGeneId = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneId", String.class);
-        getGeneId.setAccessible(true);
+        final GenePanel panel = this.genePanelFactory.build(Collections.<VocabularyTerm>emptyList(),
+            Collections.unmodifiableList(this.absentTerms));
+        assertEquals(0, panel.size());
+        assertEquals(Collections.<VocabularyTerm>emptySet(), panel.getPresentTerms());
+        assertEquals(new HashSet<>(this.absentTerms), panel.getAbsentTerms());
+        assertEquals(Collections.<TermsForGene>emptyList(), panel.getTermsForGeneList());
 
-        final String geneSymbol = "HP:invalid";
-
-        doReturn(null).when(this.hgnc).getTerm(geneSymbol);
-
-        final Object responseObject = getGeneId.invoke(this.genePanel, geneSymbol);
-        assertEquals("HP:invalid", responseObject);
+        final JSONObject expectedJSON = new JSONObject().put(SIZE_LABEL, 0).put(GENES_LABEL, new JSONArray());
+        assertTrue(expectedJSON.similar(panel.toJSON()));
     }
 
     @Test
-    public void getGeneIdGeneSymbolValidNoEnsemblIdList()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException, NoSuchFieldException
+    public void testGetPresentTermsIfOnlyPresentTermsProvided()
     {
-        final VocabularyTerm geneTerm = mock(VocabularyTerm.class);
-        final Method getGeneId = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneId", String.class);
-        getGeneId.setAccessible(true);
-
-        final String geneSymbol = "HP:valid";
-
-        doReturn(geneTerm).when(this.hgnc).getTerm(geneSymbol);
-        doReturn(null).when(geneTerm).get("ensembl_gene_id");
-
-        final Object responseObject = getGeneId.invoke(this.genePanel, geneSymbol);
-        assertEquals("HP:valid", responseObject);
+        assertEquals(new HashSet<>(this.presentTerms), this.presentTermsGenePanel.getPresentTerms());
     }
 
     @Test
-    public void getGeneIdGeneSymbolValidEnsemblIdListEmpty()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException, NoSuchFieldException
+    public void testGetAbsentTermsIfOnlyPresentTermsProvided()
     {
-        final VocabularyTerm geneTerm = mock(VocabularyTerm.class);
-        final Method getGeneId = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneId", String.class);
-        getGeneId.setAccessible(true);
-
-        final String geneSymbol = "HP:valid";
-
-        doReturn(geneTerm).when(this.hgnc).getTerm(geneSymbol);
-        doReturn(Collections.emptyList()).when(geneTerm).get("ensembl_gene_id");
-
-        final Object responseObject = getGeneId.invoke(this.genePanel, geneSymbol);
-        assertEquals("HP:valid", responseObject);
+        assertEquals(Collections.emptySet(), this.presentTermsGenePanel.getAbsentTerms());
     }
 
     @Test
-    public void getGeneIdGeneSymbolValidEnsemblIdListNotEmpty()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException, NoSuchFieldException
+    public void testGetTermsForGeneListIfOnlyPresentTermsProvided()
     {
-        final VocabularyTerm geneTerm = mock(VocabularyTerm.class);
-        final Method getGeneId = DefaultGenePanelImpl.class.getDeclaredMethod("getGeneId", String.class);
-        getGeneId.setAccessible(true);
+        final List<TermsForGene> termsForGeneList = this.presentTermsGenePanel.getTermsForGeneList();
+        assertEquals(3, termsForGeneList.size());
 
-        final String geneSymbol = "HP:valid";
+        // The first term should be "gene2", since it has the most number of appearances.
+        assertEquals(GENE2, termsForGeneList.get(0).getGeneSymbol());
+        assertEquals(GENE_ID2, termsForGeneList.get(0).getGeneId());
 
-        doReturn(geneTerm).when(this.hgnc).getTerm(geneSymbol);
-        doReturn(ImmutableList.of("ENSG0001", "ENSG0002", "ENSG0003")).when(geneTerm).get("ensembl_gene_id");
+        // "gene2" should appear in two terms.
+        assertEquals(2, termsForGeneList.get(0).getCount());
 
-        final Object responseObject = getGeneId.invoke(this.genePanel, geneSymbol);
-        assertEquals("ENSG0001", responseObject);
+        // "gene2" should be associated with both present terms.
+        final Set<VocabularyTerm> terms1 = new HashSet<>();
+        terms1.add(this.presentTerm1);
+        terms1.add(this.presentTerm2);
+        assertEquals(terms1, termsForGeneList.get(0).getTerms());
+
+        // test expected json for "gene2" TermsForGene object.
+        assertTrue(this.termsForGeneJSON1.similar(termsForGeneList.get(0).toJSON()));
+
+
+        // The second term should be "gene1", since it appears only one time, and comes ahead of "gene3" w.r.t. natural
+        // order of its first associated phenotype.
+        assertEquals(GENE1, termsForGeneList.get(1).getGeneSymbol());
+        assertEquals(GENE_ID1, termsForGeneList.get(1).getGeneId());
+
+        // "gene1" should appear in one term.
+        assertEquals(1, termsForGeneList.get(1).getCount());
+
+        // "gene1" should be associated with first present term.
+        final Set<VocabularyTerm> terms2 = new HashSet<>();
+        terms2.add(this.presentTerm1);
+        assertEquals(terms2, termsForGeneList.get(1).getTerms());
+
+        // test expected json for "gene1" TermsForGene object.
+        assertTrue(this.termsForGeneJSON2.similar(termsForGeneList.get(1).toJSON()));
+
+
+        // The third term should be "gene3", since it appears only one time, and comes after of "gene1" w.r.t. natural
+        // order of its first associated phenotype.
+        assertEquals(GENE3, termsForGeneList.get(2).getGeneSymbol());
+        assertEquals(GENE3, termsForGeneList.get(2).getGeneId());
+
+        // "gene3" should appear in one term.
+        assertEquals(1, termsForGeneList.get(2).getCount());
+
+        // "gene3" should be associated with second present term.
+        final Set<VocabularyTerm> terms3 = new HashSet<>();
+        terms3.add(this.presentTerm2);
+        assertEquals(terms3, termsForGeneList.get(2).getTerms());
+
+        // test expected json for "gene3" TermsForGene object.
+        assertTrue(this.termsForGeneJSON3.similar(termsForGeneList.get(2).toJSON()));
     }
 
     @Test
-    public void createPhenotypesForGeneObjNoEnsemblId()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void testToJSONIfOnlyPresentTermsProvided()
     {
-        final Map<String, PhenotypesForGene> phenotypesForGeneMap = new HashMap<>();
+        assertTrue(this.expectedJSON.similar(this.patientGenePanel.toJSON()));
+    }
 
-        final Method createPhenotypesForGeneObj =
-            DefaultGenePanelImpl.class.getDeclaredMethod("createPhenotypesForGeneObj", Map.class, String.class);
-        createPhenotypesForGeneObj.setAccessible(true);
 
-        final String geneSymbol = "gene1";
-
-        doReturn(null).when(this.hgnc).getTerm(geneSymbol);
-
-        final Object responseObj = createPhenotypesForGeneObj.invoke(this.genePanel, phenotypesForGeneMap, geneSymbol);
-        assertEquals(new DefaultPhenotypesForGeneImpl(geneSymbol, geneSymbol).toJSON().toString(),
-            ((PhenotypesForGene) responseObj).toJSON().toString());
+    @Test
+    public void testSizeIfOnlyPresentTermsProvided()
+    {
+        assertEquals(3, this.presentTermsGenePanel.size());
     }
 
     @Test
-    public void createPhenotypesForGeneObjHasEnsemblId()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void testGetPresentTermsIfPresentAndAbsentTermsProvided()
     {
-        final VocabularyTerm vocabularyTerm = mock(VocabularyTerm.class);
-        final Map<String, PhenotypesForGene> phenotypesForGeneMap = new HashMap<>();
-
-        final Method createPhenotypesForGeneObj =
-            DefaultGenePanelImpl.class.getDeclaredMethod("createPhenotypesForGeneObj", Map.class, String.class);
-        createPhenotypesForGeneObj.setAccessible(true);
-
-        final String geneSymbol = "gene1";
-
-        doReturn(vocabularyTerm).when(this.hgnc).getTerm(geneSymbol);
-        doReturn(ImmutableList.of("ENSG0001", "ENSG0002", "ENSG0003")).when(vocabularyTerm).get("ensembl_gene_id");
-
-        final Object responseObj = createPhenotypesForGeneObj.invoke(this.genePanel, phenotypesForGeneMap, geneSymbol);
-        assertEquals(new DefaultPhenotypesForGeneImpl(geneSymbol, "ENSG0001").toJSON().toString(),
-            ((PhenotypesForGene) responseObj).toJSON().toString());
-
-        assertTrue(phenotypesForGeneMap.containsKey(geneSymbol)
-            && phenotypesForGeneMap.containsValue(responseObj)
-            && phenotypesForGeneMap.size() == 1);
+        assertEquals(new HashSet<>(this.presentTerms), this.termsGenePanel.getPresentTerms());
     }
 
     @Test
-    public void addPhenotypeForGeneEmptyGeneList()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void testGetAbsentTermsIfPresentAndAbsentTermsProvided()
     {
-        final VocabularyTerm vocabularyTerm = mock(VocabularyTerm.class);
-        final Map<String, PhenotypesForGene> phenotypesForGeneMap = new HashMap<>();
-        final Method addPhenotypeForGene = DefaultGenePanelImpl.class.getDeclaredMethod("addPhenotypeForGene",
-            VocabularyTerm.class, List.class, Map.class);
-        addPhenotypeForGene.setAccessible(true);
+        assertEquals(new HashSet<>(this.absentTerms), this.termsGenePanel.getAbsentTerms());
 
-        addPhenotypeForGene.invoke(this.genePanel, vocabularyTerm, Collections.emptyList(), phenotypesForGeneMap);
-        assertTrue(phenotypesForGeneMap.isEmpty());
     }
 
     @Test
-    public void addPhenotypeForGeneTermNotYetAdded()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void testGetTermsForGeneListIfPresentAndAbsentTermsProvided()
     {
-        final VocabularyTerm vocabularyTerm = mock(VocabularyTerm.class);
+        final List<TermsForGene> termsForGeneList = this.termsGenePanel.getTermsForGeneList();
+        assertEquals(3, termsForGeneList.size());
+
+        // The first term should be "gene2", since it has the most number of appearances.
+        assertEquals(GENE2, termsForGeneList.get(0).getGeneSymbol());
+        assertEquals(GENE_ID2, termsForGeneList.get(0).getGeneId());
+
+        // "gene2" should appear in two terms.
+        assertEquals(2, termsForGeneList.get(0).getCount());
+
+        // "gene2" should be associated with both present terms.
+        final Set<VocabularyTerm> terms1 = new HashSet<>();
+        terms1.add(this.presentTerm1);
+        terms1.add(this.presentTerm2);
+        assertEquals(terms1, termsForGeneList.get(0).getTerms());
+
+        // test expected json for "gene2" TermsForGene object.
+        assertTrue(this.termsForGeneJSON1.similar(termsForGeneList.get(0).toJSON()));
+
+
+        // The second term should be "gene1", since it appears only one time, and comes ahead of "gene3" w.r.t. natural
+        // order.
+        assertEquals(GENE1, termsForGeneList.get(1).getGeneSymbol());
+        assertEquals(GENE_ID1, termsForGeneList.get(1).getGeneId());
+
+        // "gene1" should appear in one term.
+        assertEquals(1, termsForGeneList.get(1).getCount());
+
+        // "gene1" should be associated with first present term.
+        final Set<VocabularyTerm> terms2 = new HashSet<>();
+        terms2.add(this.presentTerm1);
+        assertEquals(terms2, termsForGeneList.get(1).getTerms());
+
+        // test expected json for "gene1" TermsForGene object.
+        assertTrue(this.termsForGeneJSON2.similar(termsForGeneList.get(1).toJSON()));
+
+
+        // The third term should be "gene3", since it appears only one time, and comes after of "gene1" w.r.t. natural
+        // order.
+        assertEquals(GENE3, termsForGeneList.get(2).getGeneSymbol());
+        assertEquals(GENE3, termsForGeneList.get(2).getGeneId());
+
+        // "gene3" should appear in one term.
+        assertEquals(1, termsForGeneList.get(2).getCount());
+
+        // "gene3" should be associated with second present term.
+        final Set<VocabularyTerm> terms3 = new HashSet<>();
+        terms3.add(this.presentTerm2);
+        assertEquals(terms3, termsForGeneList.get(2).getTerms());
+
+        // test expected json for "gene3" TermsForGene object.
+        assertTrue(this.termsForGeneJSON3.similar(termsForGeneList.get(2).toJSON()));
+    }
+
+    @Test
+    public void testToJSONIfPresentAndAbsentTermsProvided()
+    {
+        assertTrue(this.expectedJSON.similar(this.patientGenePanel.toJSON()));
+    }
+
+
+    @Test
+    public void testSizeIfPresentAndAbsentTermsProvided()
+    {
+        assertEquals(3, this.termsGenePanel.size());
+    }
+
+    //--------------------------------Gene panel from features---------------------------------//
+
+    @Test
+    public void confirmPanelIsEmptyIfEmptyFeatures()
+    {
+        final GenePanel panel = this.genePanelFactory.build(Collections.<Feature>emptySet());
+        assertEquals(0, panel.size());
+        assertEquals(Collections.<VocabularyTerm>emptySet(), panel.getPresentTerms());
+        assertEquals(Collections.<VocabularyTerm>emptySet(), panel.getAbsentTerms());
+        assertEquals(Collections.<TermsForGene>emptyList(), panel.getTermsForGeneList());
+
+        final JSONObject expectedJSON = new JSONObject().put(SIZE_LABEL, 0).put(GENES_LABEL, new JSONArray());
+        assertTrue(expectedJSON.similar(panel.toJSON()));
+    }
+
+    //--------------------------------------Helper methods-------------------------------------//
+
+    /**
+     * Helper method for mocking all outside components for GenePanel
+     */
+    @SuppressWarnings("unchecked")
+    private void makeGenePanelMocks()
+    {
+        this.patient = mock(Patient.class);
+        final Set<Feature> features = new HashSet<>();
+        this.presentTerms = new ArrayList<>();
+        this.absentTerms = new ArrayList<>();
+
+        final Feature presentFeature1 = mock(Feature.class);
+        final Feature presentFeature2 = mock(Feature.class);
+        final Feature absentFeature = mock(Feature.class);
+
+        features.add(presentFeature1);
+        features.add(presentFeature2);
+        features.add(absentFeature);
+
+        this.presentTerm1 = mock(VocabularyTerm.class);
+        this.presentTerm2 = mock(VocabularyTerm.class);
+        final VocabularyTerm absentTerm = mock(VocabularyTerm.class);
+
+        this.presentTerms.add(this.presentTerm1);
+        this.presentTerms.add(this.presentTerm2);
+        this.absentTerms.add(absentTerm);
+
+        final VocabularyTerm geneTerm1 = mock(VocabularyTerm.class);
         final VocabularyTerm geneTerm2 = mock(VocabularyTerm.class);
         final VocabularyTerm geneTerm3 = mock(VocabularyTerm.class);
 
-        final JSONObject vocabularyTermJSON = new JSONObject();
-        vocabularyTermJSON.put("HP:0001", "data");
+        final Object associatedGenes1 = new ArrayList<>();
+        ((List<String>) associatedGenes1).add(GENE2);
+        ((List<String>) associatedGenes1).add(GENE1);
 
-        final Map<String, PhenotypesForGene> phenotypesForGeneMap = new HashMap<>();
-        final String geneSymbol1 = "gene1";
-        final String geneSymbol2 = "gene2";
-        final String geneSymbol3 = "gene3";
+        final Object associatedGenes2 = new ArrayList<>();
+        ((List<String>) associatedGenes2).add(GENE2);
+        ((List<String>) associatedGenes2).add(GENE3);
 
-        phenotypesForGeneMap.put(geneSymbol1, new DefaultPhenotypesForGeneImpl(geneSymbol1, "ENSG0001"));
+        Mockito.<Set<? extends Feature>> when(this.patient.getFeatures()).thenReturn(features);
 
-        final Method addPhenotypeForGene = DefaultGenePanelImpl.class.getDeclaredMethod("addPhenotypeForGene",
-            VocabularyTerm.class, List.class, Map.class);
-        addPhenotypeForGene.setAccessible(true);
+        when(presentFeature1.isPresent()).thenReturn(Boolean.TRUE);
+        when(presentFeature2.isPresent()).thenReturn(Boolean.TRUE);
+        when(absentFeature.isPresent()).thenReturn(Boolean.FALSE);
 
-        doReturn(vocabularyTermJSON).when(vocabularyTerm).toJSON();
-        doReturn(geneTerm2).when(this.hgnc).getTerm(geneSymbol2);
-        doReturn(geneTerm3).when(this.hgnc).getTerm(geneSymbol3);
+        when(presentFeature1.getValue()).thenReturn(HPO_TERM1);
+        when(presentFeature2.getValue()).thenReturn(HPO_TERM2);
+        when(absentFeature.getValue()).thenReturn(HPO_TERM3);
 
-        doReturn(ImmutableList.of("ENSG0002a", "ENSG0002b")).when(geneTerm2).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG0003a")).when(geneTerm3).get("ensembl_gene_id");
+        when(this.hpo.getTerm(HPO_TERM1)).thenReturn(this.presentTerm1);
+        when(this.hpo.getTerm(HPO_TERM2)).thenReturn(this.presentTerm2);
+        when(this.hpo.getTerm(HPO_TERM3)).thenReturn(absentTerm);
 
-        addPhenotypeForGene.invoke(this.genePanel, vocabularyTerm, ImmutableList.of(geneSymbol2, geneSymbol3),
-            phenotypesForGeneMap);
+        when(this.presentTerm1.get(ASSOCIATED_GENES)).thenReturn(associatedGenes1);
+        when(this.presentTerm2.get(ASSOCIATED_GENES)).thenReturn(associatedGenes2);
 
-        assertTrue(phenotypesForGeneMap.containsKey(geneSymbol1)
-            && phenotypesForGeneMap.containsKey(geneSymbol2)
-            && phenotypesForGeneMap.containsKey(geneSymbol3)
-            && phenotypesForGeneMap.size() == 3);
+        when(this.hgnc.getTerm(GENE1)).thenReturn(geneTerm1);
+        when(this.hgnc.getTerm(GENE2)).thenReturn(geneTerm2);
+        when(this.hgnc.getTerm(GENE3)).thenReturn(geneTerm3);
 
-        assertEquals(phenotypesForGeneMap.get(geneSymbol1).toJSON().toString(),
-            new DefaultPhenotypesForGeneImpl(geneSymbol1, "ENSG0001").toJSON().toString());
+        when(geneTerm1.get(ENSEMBL_ID)).thenReturn(GENE_ID_LIST1);
+        when(geneTerm2.get(ENSEMBL_ID)).thenReturn(GENE_ID_LIST2);
+        when(geneTerm3.get(ENSEMBL_ID)).thenReturn(null);
 
-        final PhenotypesForGene expected1 = new DefaultPhenotypesForGeneImpl(geneSymbol2, "ENSG0002a");
-        expected1.addTerm(vocabularyTerm);
-        assertEquals(phenotypesForGeneMap.get(geneSymbol2).toJSON().toString(), expected1.toJSON().toString());
+        when(this.presentTerm1.toJSON()).thenReturn(new JSONObject().put(ID_LABEL, HPO_TERM1));
+        when(this.presentTerm2.toJSON()).thenReturn(new JSONObject().put(ID_LABEL, HPO_TERM2));
+        when(absentTerm.toJSON()).thenReturn(new JSONObject().put(ID_LABEL, HPO_TERM3));
 
-        final PhenotypesForGene expected2 = new DefaultPhenotypesForGeneImpl(geneSymbol3, "ENSG0003a");
-        expected2.addTerm(vocabularyTerm);
-        assertEquals(phenotypesForGeneMap.get(geneSymbol3).toJSON().toString(), expected2.toJSON().toString());
-
-        assertEquals(0, phenotypesForGeneMap.get(geneSymbol1).getCount());
-        assertEquals(1, phenotypesForGeneMap.get(geneSymbol2).getCount());
-        assertEquals(1, phenotypesForGeneMap.get(geneSymbol3).getCount());
+        when(this.presentTerm1.getName()).thenReturn(HPO_TERM1);
+        when(this.presentTerm2.getName()).thenReturn(HPO_TERM2);
+        when(absentTerm.getName()).thenReturn(HPO_TERM3);
     }
 
-    @Test
-    public void addPhenotypeForGeneTermAddedTermsIncrementCorrectly()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    /**
+     * Mock up expected JSON outputs.
+     */
+    private void makeExpectedTermsForGeneJSON()
     {
-        final VocabularyTerm vocabularyTerm1 = mock(VocabularyTerm.class);
-        final VocabularyTerm vocabularyTerm2 = mock(VocabularyTerm.class);
-
-        final VocabularyTerm geneTerm1 = mock(VocabularyTerm.class);
-        final VocabularyTerm geneTerm2a = mock(VocabularyTerm.class);
-        final VocabularyTerm geneTerm2b = mock(VocabularyTerm.class);
-
-        final JSONObject vocabularyTermJSON1 = new JSONObject();
-        vocabularyTermJSON1.put("HP:0001", "data");
-
-        final JSONObject vocabularyTermJSON2 = new JSONObject();
-        vocabularyTermJSON2.put("HP:0002", "data");
-
-        final Map<String, PhenotypesForGene> phenotypesForGeneMap = new HashMap<>();
-        final String geneSymbol1 = "gene1";
-        final String geneSymbol2 = "gene2";
-
-        final Method addPhenotypeForGene = DefaultGenePanelImpl.class.getDeclaredMethod("addPhenotypeForGene",
-            VocabularyTerm.class, List.class, Map.class);
-        addPhenotypeForGene.setAccessible(true);
-
-        doReturn(vocabularyTermJSON1).when(vocabularyTerm1).toJSON();
-        doReturn(vocabularyTermJSON2).when(vocabularyTerm2).toJSON();
-
-        doReturn(geneTerm1).when(this.hgnc).getTerm(geneSymbol1);
-        doReturn(geneTerm2a).when(this.hgnc).getTerm(geneSymbol2);
-        doReturn(geneTerm2b).when(this.hgnc).getTerm(geneSymbol2);
-
-        doReturn(ImmutableList.of("ENSG0001a")).when(geneTerm1).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG0002a", "ENSG0002b")).when(geneTerm2a).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG0002a", "ENSG0002b")).when(geneTerm2b).get("ensembl_gene_id");
-
-        addPhenotypeForGene.invoke(this.genePanel, vocabularyTerm1, ImmutableList.of(geneSymbol1, geneSymbol2),
-            phenotypesForGeneMap);
-
-        addPhenotypeForGene.invoke(this.genePanel, vocabularyTerm2, ImmutableList.of(geneSymbol2),
-            phenotypesForGeneMap);
-
-        assertTrue(phenotypesForGeneMap.containsKey(geneSymbol1)
-            && phenotypesForGeneMap.containsKey(geneSymbol2)
-            && phenotypesForGeneMap.size() == 2);
-
-        final PhenotypesForGene expected1 = new DefaultPhenotypesForGeneImpl(geneSymbol1, "ENSG0001a");
-        expected1.addTerm(vocabularyTerm1);
-        assertEquals(phenotypesForGeneMap.get(geneSymbol1).toJSON().toString(), expected1.toJSON().toString());
-
-        final PhenotypesForGene expected2a = new DefaultPhenotypesForGeneImpl(geneSymbol2, "ENSG0002a");
-        expected2a.addTerm(vocabularyTerm1);
-        expected2a.addTerm(vocabularyTerm2);
-
-        assertEquals(phenotypesForGeneMap.get(geneSymbol2).toJSON().toString(), expected2a.toJSON().toString());
-
-        assertEquals(1, phenotypesForGeneMap.get(geneSymbol1).getCount());
-        assertEquals(2, phenotypesForGeneMap.get(geneSymbol2).getCount());
-    }
-
-    @Test
-    public void buildPresentFeaturesEmptyFeatureList()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final Method buildPresentFeatures = DefaultGenePanelImpl.class.getDeclaredMethod("buildPresentFeatures",
-            Collection.class);
-        buildPresentFeatures.setAccessible(true);
-        final Object responseObj = buildPresentFeatures.invoke(this.genePanel, Collections.emptyList());
-        assertEquals(Collections.emptySet(), responseObj);
-    }
-
-    @Test
-    public void buildPresentFeaturesFeatureListHasNullAndEmptyElements()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final List<String> featureList = new ArrayList<>();
-        featureList.add("HP:0001");
-        featureList.add("HP:0002");
-        featureList.add(null);
-        featureList.add(null);
-        featureList.add("HP:0001");
-        featureList.add("");
-        featureList.add(" ");
-
-        final VocabularyTerm vocabularyTerm1 = mock(VocabularyTerm.class);
-        final VocabularyTerm vocabularyTerm2 = mock(VocabularyTerm.class);
-
-        doReturn(vocabularyTerm1).when(this.hpo).getTerm("HP:0001");
-        doReturn(vocabularyTerm2).when(this.hpo).getTerm("HP:0002");
-
-        final Method buildPresentFeatures = DefaultGenePanelImpl.class.getDeclaredMethod("buildPresentFeatures",
-            Collection.class);
-        buildPresentFeatures.setAccessible(true);
-
-        final Object responseObj = buildPresentFeatures.invoke(this.genePanel, featureList);
-        assertEquals(ImmutableSet.of(vocabularyTerm1, vocabularyTerm2), responseObj);
-    }
-
-    @Test
-    public void buildPresentFeaturesFeatureListHasNotMappedTerms()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final List<String> featureList = new ArrayList<>();
-        featureList.add("HP:0001");
-        featureList.add("HP:0002");
-        featureList.add(null);
-        featureList.add(null);
-        featureList.add("HP:0001");
-        featureList.add("");
-        featureList.add(" ");
-
-        final VocabularyTerm vocabularyTerm2 = mock(VocabularyTerm.class);
-
-        doReturn(null).when(this.hpo).getTerm("HP:0001");
-        doReturn(vocabularyTerm2).when(this.hpo).getTerm("HP:0002");
-
-        final Method buildPresentFeatures = DefaultGenePanelImpl.class.getDeclaredMethod("buildPresentFeatures",
-            Collection.class);
-        buildPresentFeatures.setAccessible(true);
-
-        final Object responseObj = buildPresentFeatures.invoke(this.genePanel, featureList);
-        assertEquals(ImmutableSet.of(vocabularyTerm2), responseObj);
-    }
-
-    @Test
-    public void buildSortedGeneDataFromMapIfEmpty()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final Map<String, PhenotypesForGene> phenotypesForGeneMap = new HashMap<>();
-        final Method buildSortedGeneDataFromMap =
-            DefaultGenePanelImpl.class.getDeclaredMethod("buildSortedGeneDataFromMap", Map.class);
-        buildSortedGeneDataFromMap.setAccessible(true);
-        final Object responseObj = buildSortedGeneDataFromMap.invoke(this.genePanel, phenotypesForGeneMap);
-        assertEquals(Collections.emptyList(), responseObj);
-    }
-
-    @Test
-    public void buildSortedGeneDataFromMapNotEmpty()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final VocabularyTerm vocabularyTerm1 = mock(VocabularyTerm.class);
-        final VocabularyTerm vocabularyTerm2 = mock(VocabularyTerm.class);
-        final VocabularyTerm vocabularyTerm3 = mock(VocabularyTerm.class);
-        final VocabularyTerm vocabularyTerm4 = mock(VocabularyTerm.class);
-        final VocabularyTerm vocabularyTerm5 = mock(VocabularyTerm.class);
-        final VocabularyTerm vocabularyTerm6 = mock(VocabularyTerm.class);
-
-        final Map<String, PhenotypesForGene> phenotypesForGeneMap = new HashMap<>();
-
-        final PhenotypesForGene phenotypesForGene1 = new DefaultPhenotypesForGeneImpl("gene1", "ENSG1");
-        phenotypesForGene1.addTerm(vocabularyTerm3);
-        final PhenotypesForGene phenotypesForGene2 = new DefaultPhenotypesForGeneImpl("gene2", "ENSG2");
-        phenotypesForGene2.addTerm(vocabularyTerm5);
-        phenotypesForGene2.addTerm(vocabularyTerm1);
-        phenotypesForGene2.addTerm(vocabularyTerm4);
-        final PhenotypesForGene phenotypesForGene3 = new DefaultPhenotypesForGeneImpl("gene3", "ENSG3");
-        phenotypesForGene3.addTerm(vocabularyTerm2);
-        phenotypesForGene3.addTerm(vocabularyTerm6);
-
-        phenotypesForGeneMap.put("gene2", phenotypesForGene2);
-        phenotypesForGeneMap.put("gene1", phenotypesForGene1);
-        phenotypesForGeneMap.put("gene3", phenotypesForGene3);
-
-        final Method buildSortedGeneDataFromMap =
-            DefaultGenePanelImpl.class.getDeclaredMethod("buildSortedGeneDataFromMap", Map.class);
-        buildSortedGeneDataFromMap.setAccessible(true);
-
-        final Object responseObj = buildSortedGeneDataFromMap.invoke(this.genePanel, phenotypesForGeneMap);
-        assertEquals(ImmutableList.of(phenotypesForGene2, phenotypesForGene3, phenotypesForGene1), responseObj);
-    }
-
-    @Test
-    public void toJSONNoGenes() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final VocabularyManager vocabularyManager = mock(VocabularyManager.class);
-        final Vocabulary hgnc = mock(GeneNomenclature.class);
-        final Vocabulary hpo = mock(HumanPhenotypeOntology.class);
-
-        doReturn(hgnc).when(vocabularyManager).getVocabulary("hgnc");
-        doReturn(hpo).when(vocabularyManager).getVocabulary("hpo");
-
-        final GenePanel genePanel = new DefaultGenePanelImpl(Collections.<String>emptyList(), vocabularyManager);
-        final JSONObject expected = new JSONObject();
-        expected.put("size", 0);
-        expected.put("genes", new JSONArray());
-        assertEquals(expected.toString(), genePanel.toJSON().toString());
-    }
-
-    @Test
-    public void toJSONAllSymptomsValid()
-    {
-        final VocabularyManager vocabularyManager = mock(VocabularyManager.class);
-        final Vocabulary hgnc = mock(GeneNomenclature.class);
-        final Vocabulary hpo = mock(HumanPhenotypeOntology.class);
-
-        doReturn(hgnc).when(vocabularyManager).getVocabulary("hgnc");
-        doReturn(hpo).when(vocabularyManager).getVocabulary("hpo");
-
-        doReturn(this.term1).when(hpo).getTerm("HP:0001");
-        doReturn(this.term2).when(hpo).getTerm("HP:0002");
-        doReturn(this.term3).when(hpo).getTerm("HP:0003");
-
-        final JSONObject term1JSON = new JSONObject();
-        term1JSON.put("HP:0001", "data1");
-        final JSONObject term2JSON = new JSONObject();
-        term2JSON.put("HP:0002", "data2");
-        final JSONObject term3JSON = new JSONObject();
-        term3JSON.put("HP:0003", "data3");
-
-        doReturn(term1JSON).when(this.term1).toJSON();
-        doReturn(term2JSON).when(this.term2).toJSON();
-        doReturn(term3JSON).when(this.term3).toJSON();
-
-        doReturn(this.geneA).when(hgnc).getTerm("geneA");
-        doReturn(this.geneB).when(hgnc).getTerm("geneB");
-        doReturn(this.geneC).when(hgnc).getTerm("geneC");
-        doReturn(this.geneD).when(hgnc).getTerm("geneD");
-        doReturn(this.geneE).when(hgnc).getTerm("geneE");
-
-        doReturn(ImmutableList.of("geneA", "geneB", "geneC")).when(this.term1).get("associated_genes");
-        doReturn(ImmutableList.of("geneA", "geneB", "geneD")).when(this.term2).get("associated_genes");
-        doReturn(ImmutableList.of("geneE", "geneB", "geneC")).when(this.term3).get("associated_genes");
-
-        doReturn(ImmutableList.of("ENSG00A")).when(this.geneA).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG00B", "ENSG00Ba", "ENSG00Bb")).when(this.geneB).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG00C", "ENSG00Ca", "ENSG00Cb")).when(this.geneC).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG00D")).when(this.geneD).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG00E", "ENSG00Ea")).when(this.geneE).get("ensembl_gene_id");
-
-        final GenePanel genePanel = new DefaultGenePanelImpl(ImmutableList.of("HP:0001", "HP:0002", "HP:0003"),
-            vocabularyManager);
-
-
-        final PhenotypesForGene phenotypesForGene1 = new DefaultPhenotypesForGeneImpl("geneA", "ENSG00A");
-        phenotypesForGene1.addTerm(this.term1);
-        phenotypesForGene1.addTerm(this.term2);
-
-        final PhenotypesForGene phenotypesForGene2 = new DefaultPhenotypesForGeneImpl("geneB", "ENSG00B");
-        phenotypesForGene2.addTerm(this.term1);
-        phenotypesForGene2.addTerm(this.term2);
-        phenotypesForGene2.addTerm(this.term3);
-
-        final PhenotypesForGene phenotypesForGene3 = new DefaultPhenotypesForGeneImpl("geneC", "ENSG00C");
-        phenotypesForGene3.addTerm(this.term1);
-        phenotypesForGene3.addTerm(this.term3);
-
-        final PhenotypesForGene phenotypesForGene4 = new DefaultPhenotypesForGeneImpl("geneD", "ENSG00D");
-        phenotypesForGene4.addTerm(this.term2);
-
-        final PhenotypesForGene phenotypesForGene5 = new DefaultPhenotypesForGeneImpl("geneE", "ENSG00E");
-        phenotypesForGene5.addTerm(this.term3);
-
-        final JSONArray genePanelGenes = genePanel.toJSON().getJSONArray("genes");
-
-        assertEquals(5, genePanel.toJSON().getInt("size"));
-
-        assertEquals(phenotypesForGene2.toJSON().toString(), genePanelGenes.getJSONObject(0).toString());
-
-        assertTrue(phenotypesForGene1.toJSON().toString().equals(genePanelGenes.getJSONObject(1).toString())
-            || phenotypesForGene1.toJSON().toString().equals(genePanelGenes.getJSONObject(2).toString()));
-
-        assertTrue(phenotypesForGene3.toJSON().toString().equals(genePanelGenes.getJSONObject(1).toString())
-            || phenotypesForGene3.toJSON().toString().equals(genePanelGenes.getJSONObject(2).toString()));
-
-        assertTrue(phenotypesForGene4.toJSON().toString().equals(genePanelGenes.getJSONObject(3).toString())
-            || phenotypesForGene4.toJSON().toString().equals(genePanelGenes.getJSONObject(4).toString()));
-
-        assertTrue(phenotypesForGene5.toJSON().toString().equals(genePanelGenes.getJSONObject(3).toString())
-            || phenotypesForGene5.toJSON().toString().equals(genePanelGenes.getJSONObject(4).toString()));
-    }
-
-    @Test
-    public void toJSONSomeSymptomsInvalid()
-    {
-        final VocabularyManager vocabularyManager = mock(VocabularyManager.class);
-        final Vocabulary hgnc = mock(GeneNomenclature.class);
-        final Vocabulary hpo = mock(HumanPhenotypeOntology.class);
-
-        doReturn(hgnc).when(vocabularyManager).getVocabulary("hgnc");
-        doReturn(hpo).when(vocabularyManager).getVocabulary("hpo");
-
-        doReturn(this.term1).when(hpo).getTerm("HP:0001");
-        doReturn(this.term2).when(hpo).getTerm("HP:0002");
-        doReturn(null).when(hpo).getTerm("HP:0003");
-
-        final JSONObject term1JSON = new JSONObject();
-        term1JSON.put("HP:0001", "data1");
-        final JSONObject term2JSON = new JSONObject();
-        term2JSON.put("HP:0002", "data2");
-
-        doReturn(term1JSON).when(this.term1).toJSON();
-        doReturn(term2JSON).when(this.term2).toJSON();
-
-        doReturn(this.geneA).when(hgnc).getTerm("geneA");
-        doReturn(this.geneB).when(hgnc).getTerm("geneB");
-        doReturn(this.geneC).when(hgnc).getTerm("geneC");
-
-        doReturn(ImmutableList.of("geneA", "geneB", "geneC")).when(this.term1).get("associated_genes");
-        doReturn(null).when(this.term2).get("associated_genes");
-
-        doReturn(ImmutableList.of("ENSG00A")).when(this.geneA).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG00B", "ENSG00Ba", "ENSG00Bb")).when(this.geneB).get("ensembl_gene_id");
-        doReturn(ImmutableList.of("ENSG00C", "ENSG00Ca", "ENSG00Cb")).when(this.geneC).get("ensembl_gene_id");
-
-        final GenePanel genePanel = new DefaultGenePanelImpl(ImmutableList.of("HP:0001", "HP:0002", "HP:0003"),
-            vocabularyManager);
-
-        final PhenotypesForGene phenotypesForGene1 = new DefaultPhenotypesForGeneImpl("geneA", "ENSG00A");
-        phenotypesForGene1.addTerm(this.term1);
-
-        final PhenotypesForGene phenotypesForGene2 = new DefaultPhenotypesForGeneImpl("geneB", "ENSG00B");
-        phenotypesForGene2.addTerm(this.term1);
-
-        final PhenotypesForGene phenotypesForGene3 = new DefaultPhenotypesForGeneImpl("geneC", "ENSG00C");
-        phenotypesForGene3.addTerm(this.term1);
-
-        final JSONArray genePanelGenes = genePanel.toJSON().getJSONArray("genes");
-
-        final JSONArray expected = new JSONArray();
-        expected.put(phenotypesForGene3.toJSON());
-        expected.put(phenotypesForGene2.toJSON());
-        expected.put(phenotypesForGene1.toJSON());
-
-        assertEquals(3, genePanel.toJSON().getInt("size"));
-
-        assertTrue(expected.similar(genePanelGenes));
+        this.termsForGeneJSON1 =
+            new JSONObject()
+                .put(TERMS_LABEL,
+                    new JSONArray()
+                        .put(new JSONObject().put(ID_LABEL, HPO_TERM1))
+                        .put(new JSONObject().put(ID_LABEL, HPO_TERM2)))
+                .put(GENE_SYMBOL_LABEL, GENE2)
+                .put(GENE_ID_LABEL, GENE_ID2)
+                .put(COUNT_LABEL, 2);
+
+        this.termsForGeneJSON2 =
+            new JSONObject()
+                .put(TERMS_LABEL,
+                    new JSONArray()
+                        .put(new JSONObject().put(ID_LABEL, HPO_TERM1)))
+                .put(GENE_SYMBOL_LABEL, GENE1)
+                .put(GENE_ID_LABEL, GENE_ID1)
+                .put(COUNT_LABEL, 1);
+
+        this.termsForGeneJSON3 =
+            new JSONObject()
+                .put(TERMS_LABEL,
+                    new JSONArray()
+                        .put(new JSONObject().put(ID_LABEL, HPO_TERM2)))
+                .put(GENE_SYMBOL_LABEL, GENE3)
+                .put(GENE_ID_LABEL, GENE3)
+                .put(COUNT_LABEL, 1);
+
+        this.expectedJSON =
+            new JSONObject()
+                .put(SIZE_LABEL, 3)
+                .put(GENES_LABEL,
+                    new JSONArray()
+                        .put(this.termsForGeneJSON1)
+                        .put(this.termsForGeneJSON2)
+                        .put(this.termsForGeneJSON3));
     }
 }

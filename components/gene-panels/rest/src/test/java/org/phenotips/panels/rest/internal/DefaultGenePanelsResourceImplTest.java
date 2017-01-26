@@ -17,364 +17,218 @@
  */
 package org.phenotips.panels.rest.internal;
 
-import org.phenotips.panels.rest.GenePanelsLoadingCache;
+import org.phenotips.panels.GenePanel;
+import org.phenotips.panels.rest.GenePanelsResource;
 
-import org.xwiki.container.Container;
-import org.xwiki.container.Request;
+import org.xwiki.component.manager.ComponentManager;
+import org.xwiki.context.Execution;
+import org.xwiki.context.ExecutionContext;
+import org.xwiki.test.mockito.MockitoComponentMockingRule;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import javax.inject.Provider;
 import javax.ws.rs.core.Response;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
-import org.mockito.InjectMocks;
-import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.runners.MockitoJUnitRunner;
 import org.slf4j.Logger;
 
-import com.google.common.cache.LoadingCache;
-import com.google.common.collect.ImmutableList;
+import com.xpn.xwiki.XWikiContext;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link DefaultGenePanelsResourceImpl}.
  *
  * @version $Id$
- * @since 1.3M5
+ * @since 1.3M6
  */
-@RunWith(MockitoJUnitRunner.class)
 public class DefaultGenePanelsResourceImplTest
 {
-    @InjectMocks
-    private DefaultGenePanelsResourceImpl component;
+    private static final String START_PAGE_LABEL = "startPage";
+
+    private static final String TOTAL_PAGES_LABEL = "totalPages";
+
+    private static final String REQ_NO = "reqNo";
+
+    private static final String NO_CONTEXT_PROVIDED_MSG = "No content provided.";
+
+    private static final String TERM_1 = "HP:001";
+
+    private static final String TERM_2 = "HP:002";
+
+    private static final String TERM_3 = "HP:003";
+
+    @Rule
+    public MockitoComponentMockingRule<GenePanelsResource> mocker =
+        new MockitoComponentMockingRule<GenePanelsResource>(DefaultGenePanelsResourceImpl.class);
+
+    @Rule
+    public final ExpectedException exception = ExpectedException.none();
 
     @Mock
     private Logger logger;
 
-    @Mock
-    private Container container;
+    private GenePanelsResource component;
 
-    @Mock
-    private GenePanelsLoadingCache loadingCache;
-
-    @Rule
-    public final ExpectedException exception = ExpectedException.none();
+    private GenePanelLoader genePanelLoader;
 
     @Before
     public void setUp() throws Exception
     {
         MockitoAnnotations.initMocks(this);
+        MockitoAnnotations.initMocks(this);
+        Execution execution = mock(Execution.class);
+        ExecutionContext executionContext = mock(ExecutionContext.class);
+        ComponentManager compManager = this.mocker.getInstance(ComponentManager.class, "context");
+        Provider<XWikiContext> provider = this.mocker.getInstance(XWikiContext.TYPE_PROVIDER);
+        XWikiContext context = provider.get();
+        when(compManager.getInstance(Execution.class)).thenReturn(execution);
+        doReturn(executionContext).when(execution).getContext();
+        doReturn(context).when(executionContext).getProperty("xwikicontext");
+
+        this.component = this.mocker.getComponentUnderTest();
+        this.genePanelLoader = this.mocker.getInstance(GenePanelLoader.class);
+        this.logger = this.mocker.getMockedLogger();
     }
 
     @Test
-    public void determineLastIndexCalculatedTest()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void getGeneCountsFromPhenotypesNoPresentNorAbsentTermsProvided()
     {
-        final Method determineLastIndex = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("determineLastIndex",
-            int.class, int.class);
-        determineLastIndex.setAccessible(true);
+        final Response response1 = this.component.getGeneCountsFromPhenotypes(null, null, 1, 20, 1);
+        verify(this.logger).error("No content provided.");
+        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response1.getStatus());
 
-        final Object responseObj1 = determineLastIndex.invoke(this.component, 5, 4);
-        assertEquals(4, responseObj1);
+        final Response response2 = this.component.getGeneCountsFromPhenotypes(null, Collections.<String>emptyList(),
+            1, 20, 1);
+        verify(this.logger, times(2)).error(NO_CONTEXT_PROVIDED_MSG);
+        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response2.getStatus());
 
-        final Object responseObj2 = determineLastIndex.invoke(this.component, 6, 6);
-        assertEquals(6, responseObj2);
+        final Response response3 = this.component.getGeneCountsFromPhenotypes(Collections.<String>emptyList(), null,
+            1, 20, 1);
+        verify(this.logger, times(3)).error(NO_CONTEXT_PROVIDED_MSG);
+        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response3.getStatus());
 
-        final Object responseObj3 = determineLastIndex.invoke(this.component, 2, 50);
-        assertEquals(2, responseObj3);
+        final Response response4 = this.component.getGeneCountsFromPhenotypes(Collections.<String>emptyList(),
+            Collections.<String>emptyList(), 1, 20, 1);
+        verify(this.logger, times(4)).error(NO_CONTEXT_PROVIDED_MSG);
+        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response4.getStatus());
     }
 
     @Test
-    public void determineFirstIndexCalculatedTest()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
+    public void getGeneCountsFromPhenotypesAbsentTermsProvidedPresentTermsGenerateNoContent() throws ExecutionException
     {
-        final Method determineFirstIndex = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("determineFirstIndex",
-            int.class, int.class);
-        determineFirstIndex.setAccessible(true);
-
-        final Object responseObj1 = determineFirstIndex.invoke(this.component, 6, 6);
-        assertEquals(6, responseObj1);
-
-        final Object responseObj2 = determineFirstIndex.invoke(this.component, 2, 50);
-        assertEquals(2, responseObj2);
-
-        this.exception.expect(InvocationTargetException.class);
-        determineFirstIndex.invoke(this.component, 5, 4);
-    }
-
-    @Test
-    public void getAmendedJSONReturnOneItem()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getAmendedJSON = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getAmendedJSON",
-            JSONObject.class, int.class, int.class, int.class);
-        getAmendedJSON.setAccessible(true);
-
-        final JSONObject expected = new JSONObject();
-        expected.put("size", 1);
-        expected.put("genes", new JSONArray("[{\"gene\":\"gene2\", \"count\":2}]"));
-        expected.put("totalPages", 3);
-
-        final Object responseObj = getAmendedJSON.invoke(this.component, jsonObject, 1, 1, 1);
-
-        assertEquals(expected.toString(), responseObj.toString());
-    }
-
-    @Test
-    public void getAmendedJSONReturnSubsetOfItems()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getAmendedJSON = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getAmendedJSON",
-            JSONObject.class, int.class, int.class, int.class);
-        getAmendedJSON.setAccessible(true);
-
-        final JSONObject expected = new JSONObject();
-        expected.put("size", 2);
-        expected.put("genes", new JSONArray("[{\"gene\":\"gene1\", \"count\":3},{\"gene\":\"gene2\", \"count\":2}]"));
-        expected.put("totalPages", 2);
-
-        final Object responseObj = getAmendedJSON.invoke(this.component, jsonObject, 0, 1, 2);
-
-        assertEquals(expected.toString(), responseObj.toString());
-    }
-
-    @Test
-    public void getAmendedJSONReturnAllItems()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getAmendedJSON = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getAmendedJSON",
-            JSONObject.class, int.class, int.class, int.class);
-        getAmendedJSON.setAccessible(true);
-
-        final JSONObject expected = new JSONObject();
-        expected.put("size", 3);
-        expected.put("genes", new JSONArray("[{\"gene\":\"gene1\", \"count\":3},"
-            + "{\"gene\":\"gene2\", \"count\":2},{\"gene\":\"gene3\", \"count\":1}]"));
-        expected.put("totalPages", 1);
-
-        final Object responseObj = getAmendedJSON.invoke(this.component, jsonObject, 0, 2, 3);
-
-        assertEquals(expected.toString(), responseObj.toString());
-    }
-
-    @Test
-    public void getPageDataStartPageNull()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getPageData = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getPageData",
-            JSONObject.class, Object.class, Object.class);
-        getPageData.setAccessible(true);
-
-        final Object responseObj = getPageData.invoke(this.component, jsonObject, null, "50");
-        assertEquals(3, ((JSONObject) responseObj).getInt("size"));
-        assertEquals(1, ((JSONObject) responseObj).getInt("totalPages"));
-        assertEquals("[{\"gene\":\"gene1\",\"count\":3},{\"gene\":\"gene2\",\"count\":2},"
-            + "{\"gene\":\"gene3\",\"count\":1}]", ((JSONObject) responseObj).getJSONArray("genes").toString());
-    }
-
-    @Test
-    public void getPageDataNumResultsNull()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getPageData = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getPageData",
-            JSONObject.class, Object.class, Object.class);
-        getPageData.setAccessible(true);
-
-        final Object responseObj = getPageData.invoke(this.component, jsonObject, "1", null);
-        assertEquals(3, ((JSONObject) responseObj).getInt("size"));
-        assertEquals(1, ((JSONObject) responseObj).getInt("totalPages"));
-        assertEquals("[{\"gene\":\"gene1\",\"count\":3},{\"gene\":\"gene2\",\"count\":2},"
-            + "{\"gene\":\"gene3\",\"count\":1}]", ((JSONObject) responseObj).getJSONArray("genes").toString());
-    }
-
-    @Test
-    public void getPageDataStartPageIllegalDataType()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getPageData = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getPageData",
-            JSONObject.class, Object.class, Object.class);
-        getPageData.setAccessible(true);
-
-        this.exception.expect(InvocationTargetException.class);
-        getPageData.invoke(this.component, jsonObject, "1b", "50");
-    }
-
-    @Test
-    public void getPageDataNumResultsIllegalDataType()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getPageData = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getPageData",
-            JSONObject.class, Object.class, Object.class);
-        getPageData.setAccessible(true);
-
-        this.exception.expect(InvocationTargetException.class);
-        getPageData.invoke(this.component, jsonObject, "1", "40.6");
-    }
-
-    @Test
-    public void getPageDataStartPageOutOfBounds()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getPageData = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getPageData",
-            JSONObject.class, Object.class, Object.class);
-        getPageData.setAccessible(true);
-
-        this.exception.expect(InvocationTargetException.class);
-        getPageData.invoke(this.component, jsonObject, "50", "10");
-    }
-
-    @Test
-    public void getPageDataNumResultsTooMany()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getPageData = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getPageData",
-            JSONObject.class, Object.class, Object.class);
-        getPageData.setAccessible(true);
-
-        final Object responseObj = getPageData.invoke(this.component, jsonObject, "1", "50");
-        assertEquals(3, ((JSONObject) responseObj).getInt("size"));
-        assertEquals(1, ((JSONObject) responseObj).getInt("totalPages"));
-        assertEquals("[{\"gene\":\"gene1\",\"count\":3},{\"gene\":\"gene2\",\"count\":2},"
-            + "{\"gene\":\"gene3\",\"count\":1}]", ((JSONObject) responseObj).getJSONArray("genes").toString());
-    }
-
-    @Test
-    public void getPageDataNumResultsLess()
-        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException
-    {
-        final JSONObject jsonObject = new JSONObject();
-        final JSONArray genesArray = new JSONArray();
-        jsonObject.put("size", 3);
-        genesArray.put(new JSONObject("{\"gene\":\"gene1\", \"count\":3}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene2\", \"count\":2}"));
-        genesArray.put(new JSONObject("{\"gene\":\"gene3\", \"count\":1}"));
-        jsonObject.put("genes", genesArray);
-
-        final Method getPageData = DefaultGenePanelsResourceImpl.class.getDeclaredMethod("getPageData",
-            JSONObject.class, Object.class, Object.class);
-        getPageData.setAccessible(true);
-
-        final Object responseObj = getPageData.invoke(this.component, jsonObject, "1", "2");
-        assertEquals(2, ((JSONObject) responseObj).getInt("size"));
-        assertEquals(2, ((JSONObject) responseObj).getInt("totalPages"));
-        assertEquals("[{\"gene\":\"gene1\",\"count\":3},{\"gene\":\"gene2\",\"count\":2}]",
-            ((JSONObject) responseObj).getJSONArray("genes").toString());
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void getGeneCountsFromPhenotypesNoGeneDataReturned() throws Exception
-    {
-        final Request request = mock(Request.class);
-        final List<Object> inputData = ImmutableList.<Object>of("HP:0001", "HP:0002", "HP:0003");
-        doReturn(request).when(this.container).getRequest();
-        doReturn(inputData).when(request).getProperties("id");
-        doReturn("1").when(request).getProperty("startPage");
-        doReturn("2").when(request).getProperty("numResults");
-        doReturn("1").when(request).getProperty("reqNo");
-
-        final LoadingCache mockCache = mock(LoadingCache.class);
-        doReturn(mockCache).when(this.loadingCache).getCache();
-
-        // ExecutionException is protected, use reflection to get class instance.
-        final Class<?> executionExceptionClass = Class.forName("java.util.concurrent.ExecutionException");
-        final Constructor<?> constructor = executionExceptionClass.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        final ExecutionException executionException = (ExecutionException) constructor.newInstance();
-
-        doThrow(executionException).when(mockCache).get(Matchers.anyString());
-
-        final Response response = this.component.getGeneCountsFromPhenotypes();
+        final List<String> presentTerms = Collections.emptyList();
+        final List<String> absentTerms = Collections.singletonList(TERM_1);
+        when(this.genePanelLoader.get(presentTerms)).thenThrow(new ExecutionException(new Throwable()));
+        final Response response = this.component.getGeneCountsFromPhenotypes(presentTerms, absentTerms, 1, 20, 1);
+        verify(this.logger).error("No content associated with [present-term: {}, absent-term: {}].", presentTerms,
+                absentTerms);
         assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
-        verify(this.logger).warn("No content associated with [{}]", inputData);
+    }
+
+    @Test
+    public void getGeneCountsFromPhenotypesStartPageNegativeResultsInBadRequest() throws ExecutionException
+    {
+        final List<String> presentTerms = Collections.singletonList(TERM_2);
+        final List<String> absentTerms = Collections.singletonList(TERM_1);
+        final GenePanel genePanel = mock(GenePanel.class);
+
+        when(this.genePanelLoader.get(presentTerms)).thenReturn(genePanel);
+        final Response response = this.component.getGeneCountsFromPhenotypes(presentTerms, absentTerms, -20, 20, 1);
+        verify(this.logger).error("The requested [{}: {}] is out of bounds.", START_PAGE_LABEL, -20);
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    }
+
+    @Test
+    public void getGeneCountsFromPhenotypesStartPageOutOfBounds() throws ExecutionException
+    {
+        final List<String> presentTerms = Collections.singletonList(TERM_2);
+        final List<String> absentTerms = Collections.singletonList(TERM_1);
+        final GenePanel genePanel = mock(GenePanel.class);
+
+        when(genePanel.size()).thenReturn(1);
+        when(this.genePanelLoader.get(presentTerms)).thenReturn(genePanel);
+        final Response response = this.component.getGeneCountsFromPhenotypes(presentTerms, absentTerms, 2, 20, 1);
+        verify(this.logger).error("The requested [{}: {}] is out of bounds.", START_PAGE_LABEL, 2);
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    }
+
+    @Test
+    public void getGeneCountsFromPhenotypesReturnEverythingIfNumResultsIsNegative() throws ExecutionException
+    {
+        final List<String> presentTerms = Arrays.asList(TERM_1, TERM_2);
+        final List<String> absentTerms = Collections.singletonList(TERM_3);
+        final GenePanel genePanel = mock(GenePanel.class);
+
+        when(genePanel.size()).thenReturn(2);
+        when(genePanel.toJSON()).thenReturn(new JSONObject());
+        when(this.genePanelLoader.get(presentTerms)).thenReturn(genePanel);
+        final Response response = this.component.getGeneCountsFromPhenotypes(presentTerms, absentTerms, 1, -1, 1);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertTrue(new JSONObject().put(TOTAL_PAGES_LABEL, 1).put(REQ_NO, 1).similar(response.getEntity()));
+    }
+
+    @Test
+    public void getGeneCountsFromPhenotypesReturnActualNumberOfResultsIfNumResultsLarger() throws ExecutionException
+    {
+        final List<String> presentTerms = Collections.singletonList(TERM_1);
+        final List<String> absentTerms = Collections.singletonList(TERM_3);
+        final GenePanel genePanel = mock(GenePanel.class);
+
+        when(genePanel.size()).thenReturn(1);
+        when(genePanel.toJSON()).thenReturn(new JSONObject());
+        when(this.genePanelLoader.get(presentTerms)).thenReturn(genePanel);
+        final Response response = this.component.getGeneCountsFromPhenotypes(presentTerms, absentTerms, 1, 2, 1);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals(new JSONObject().put(TOTAL_PAGES_LABEL, 1).put(REQ_NO, 1).toString(),
+            response.getEntity().toString());
+    }
+
+    @Test
+    public void getGeneCountsFromPhenotypesReturnRequestedNumResults() throws ExecutionException
+    {
+        final List<String> presentTerms = Arrays.asList(TERM_1, TERM_2);
+        final List<String> absentTerms = Collections.singletonList(TERM_3);
+        final GenePanel genePanel = mock(GenePanel.class);
+
+        when(genePanel.size()).thenReturn(2);
+        when(genePanel.toJSON(0, 1)).thenReturn(new JSONObject());
+        when(this.genePanelLoader.get(presentTerms)).thenReturn(genePanel);
+        final Response response = this.component.getGeneCountsFromPhenotypes(presentTerms, absentTerms, 1, 1, 1);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals(new JSONObject().put(TOTAL_PAGES_LABEL, 2).put(REQ_NO, 1).toString(),
+            response.getEntity().toString());
+    }
+
+    @Test
+    public void getGeneCountsFromPhenotypesDefaultReqNo() throws ExecutionException
+    {
+        final List<String> presentTerms = Collections.singletonList(TERM_1);
+        final List<String> absentTerms = Collections.singletonList(TERM_3);
+        final GenePanel genePanel = mock(GenePanel.class);
+
+        when(genePanel.size()).thenReturn(1);
+        when(genePanel.toJSON()).thenReturn(new JSONObject());
+        when(this.genePanelLoader.get(presentTerms)).thenReturn(genePanel);
+        final Response response = this.component.getGeneCountsFromPhenotypes(presentTerms, absentTerms, 1, 1, 0);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals(new JSONObject().put(TOTAL_PAGES_LABEL, 1).put(REQ_NO, 0).toString(),
+            response.getEntity().toString());
     }
 }
