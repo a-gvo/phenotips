@@ -48,7 +48,6 @@ import static org.mockito.Mockito.when;
  * @version $Id$
  * @since 1.3M6
  */
-@RunWith(MockitoJUnitRunner.class)
 public class DefaultGenePanelLoaderTest
 {
     @Rule
