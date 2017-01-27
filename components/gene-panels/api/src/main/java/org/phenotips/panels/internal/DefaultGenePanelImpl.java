@@ -233,20 +233,21 @@ public class DefaultGenePanelImpl implements GenePanel
      */
     private int compareByTermList(final Iterator<VocabularyTerm> first, final Iterator<VocabularyTerm> second)
     {
-        // The two lists are equivalent.
-        if (!first.hasNext()) {
-            return 0;
-        }
-        // Both our iterators are of the same size.
-        final String firstName = getTermName(first.next());
-        final String secondName = getTermName(second.next());
-        final int compValue = firstName.compareTo(secondName);
-        // If compValue is 0 then we need to compare by next item.
-        if (compValue == 0) {
-            return compareByTermList(first, second);
-        }
-        // If compValue is not 0, then we figured out which item should be sorted ahead.
-        return compValue;
+//        // The two lists are equivalent.
+//        if (!first.hasNext()) {
+//            return 0;
+//        }
+//        // Both our iterators are of the same size.
+//        final String firstName = getTermName(first.next());
+//        final String secondName = getTermName(second.next());
+//        final int compValue = firstName.compareTo(secondName);
+//        // If compValue is 0 then we need to compare by next item.
+//        if (compValue == 0) {
+//            return compareByTermList(first, second);
+//        }
+//        // If compValue is not 0, then we figured out which item should be sorted ahead.
+//        return compValue;
+        return 0;
     }
 
     /**
