@@ -21,6 +21,7 @@ import org.phenotips.data.DictionaryPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 
 import org.xwiki.component.annotation.Component;
 import org.xwiki.model.reference.ObjectPropertyReference;
@@ -32,7 +33,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.function.Function;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -87,18 +91,51 @@ public class APGARController implements PatientDataController<Integer>
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void save(Patient patient)
     {
-        BaseObject dataHolder = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
-        PatientData<Integer> data = patient.getData(getName());
-        if (data == null || dataHolder == null) {
-            return;
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(final Patient patient, final PatientWritePolicy policy)
+    {
+        final BaseObject dataHolder = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
+        if (dataHolder == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
         }
-        for (String propertyName : getProperties()) {
-            Integer value = data.get(propertyName);
-            BaseProperty<ObjectPropertyReference> field =
+
+        final PatientData<Integer> data = patient.getData(getName());
+        if (data == null) {
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                writeToPatientDoc(dataHolder, p -> null);
+            }
+        } else {
+            writeToPatientDoc(dataHolder, propertyToValue(patient, data, policy));
+        }
+    }
+
+    private Function<String, Integer> propertyToValue(
+        @Nonnull final Patient patient,
+        @Nonnull final PatientData<Integer> data,
+        @Nonnull final PatientWritePolicy policy) {
+        if (Objects.equals(PatientWritePolicy.MERGE, policy)) {
+            final PatientData<Integer> storedData = load(patient);
+            return p -> {
+                final Integer value = data.get(p);
+                return value == null ? storedData.get(p) : value;
+            };
+        } else {
+            return data::get;
+        }
+    }
+
+    private void writeToPatientDoc(final BaseObject dataHolder, final Function<String, Integer> valueForProperty)
+    {
+        for (final String propertyName : getProperties()) {
+            final Integer value = valueForProperty.apply(propertyName);
+            @SuppressWarnings("unchecked")
+            final BaseProperty<ObjectPropertyReference> field =
                 (BaseProperty<ObjectPropertyReference>) dataHolder.getField(propertyName);
             if (value != null) {
                 field.setValue(value.toString());

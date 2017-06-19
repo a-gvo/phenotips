@@ -22,6 +22,7 @@ import org.phenotips.data.IndexedPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 
 import org.xwiki.component.annotation.Component;
 import org.xwiki.model.EntityType;
@@ -29,7 +30,10 @@ import org.xwiki.model.reference.EntityReference;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -109,22 +113,48 @@ public class AllergiesController implements PatientDataController<String>
     @Override
     public void save(Patient patient)
     {
-        PatientData<String> data = patient.getData(DATA_NAME);
-        if (data == null || !data.isIndexed()) {
-            return;
-        }
+        save(patient, PatientWritePolicy.UPDATE);
+    }
 
+    @Override
+    public void save(final Patient patient, final PatientWritePolicy policy)
+    {
+        final BaseObject xobject = patient.getXDocument().getXObject(CLASS_REFERENCE, true, this.xcontext.get());
+        if (xobject == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+        }
+        final PatientData<String> data = patient.getData(DATA_NAME);
+        if (data == null || !data.isIndexed()) {
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                writeToPatientDoc(xobject, false, Collections.emptyList());
+            }
+        } else {
+            final List<String> allergies = new ArrayList<>();
+            boolean nkda;
+            if (Objects.equals(PatientWritePolicy.MERGE, policy)) {
+                final Optional<PatientData<String>> storedData = Optional.ofNullable(load(patient));
+                storedData.ifPresent(d -> addAllergies(d, allergies));
+            }
+            nkda = addAllergies(data, allergies);
+            writeToPatientDoc(xobject, nkda, allergies);
+        }
+    }
+
+    private boolean addAllergies(final PatientData<String> data, final List<String> allergies)
+    {
         boolean nkda = false;
-        List<String> allergies = new ArrayList<>(data.size());
-        for (String allergy : data) {
-            if (NKDA.equals(allergy)) {
+        for (final String allergy : data) {
+            if (Objects.equals(NKDA, allergy)) {
                 nkda = true;
             } else {
                 allergies.add(allergy);
             }
         }
+        return nkda;
+    }
 
-        BaseObject xobject = patient.getXDocument().getXObject(CLASS_REFERENCE, true, this.xcontext.get());
+    private void writeToPatientDoc(final BaseObject xobject, final boolean nkda, final List<String> allergies)
+    {
         xobject.setIntValue(NKDA, nkda ? 1 : 0);
         xobject.setDBStringListValue(DATA_NAME, allergies);
     }

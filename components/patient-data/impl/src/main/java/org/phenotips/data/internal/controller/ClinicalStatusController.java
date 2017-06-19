@@ -20,12 +20,14 @@ package org.phenotips.data.internal.controller;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.data.SimpleValuePatientData;
 
 import org.xwiki.component.annotation.Component;
 import org.xwiki.model.reference.ObjectPropertyReference;
 
 import java.util.Collection;
+import java.util.Objects;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -132,6 +134,40 @@ public class ClinicalStatusController implements PatientDataController<String>
         if (StringUtils.equals(data.getValue(), VALUE_AFFECTED)) {
             isNormal.setValue(0);
         } else if (StringUtils.equals(data.getValue(), VALUE_UNAFFECTED)) {
+            isNormal.setValue(1);
+        }
+    }
+
+    @Override
+    public void save(final Patient patient, final PatientWritePolicy policy)
+    {
+        final BaseObject xobject = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
+        if (xobject == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+        }
+        @SuppressWarnings("unchecked")
+        final BaseProperty<ObjectPropertyReference> isNormal =
+            (BaseProperty<ObjectPropertyReference>) xobject.getField(PATIENT_DOCUMENT_FIELDNAME);
+
+        if (isNormal == null) {
+            return;
+        }
+
+        final PatientData<String> data = patient.getData(getName());
+        if (data == null) {
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                isNormal.setValue(0);
+            }
+        } else {
+            setValue(data.getValue(), isNormal);
+        }
+    }
+
+    private void setValue(final String value, final BaseProperty<ObjectPropertyReference> isNormal)
+    {
+        if (StringUtils.equals(value, VALUE_AFFECTED)) {
+            isNormal.setValue(0);
+        } else if (StringUtils.equals(value, VALUE_UNAFFECTED)) {
             isNormal.setValue(1);
         }
     }

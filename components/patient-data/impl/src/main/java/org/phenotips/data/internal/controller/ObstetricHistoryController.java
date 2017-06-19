@@ -22,6 +22,7 @@ import org.phenotips.data.DictionaryPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 
 import org.xwiki.component.annotation.Component;
 import org.xwiki.model.EntityType;
@@ -33,7 +34,10 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Predicate;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
@@ -121,15 +125,50 @@ public class ObstetricHistoryController implements PatientDataController<Integer
     @Override
     public void save(Patient patient)
     {
-        PatientData<Integer> data = patient.getData(getName());
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(@Nonnull final Patient patient, @Nonnull final PatientWritePolicy policy)
+    {
+        final XWikiContext context = this.xcontext.get();
+        final BaseObject dataHolder = patient.getXDocument().getXObject(getXClassReference(), true, context);
+        if (dataHolder == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+        }
+
+        final PatientData<Integer> data = patient.getData(getName());
         if (data == null || !data.isNamed()) {
-            return;
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                getProperties().forEach(propertyName
+                    -> dataHolder.set(PREFIX + propertyName, null, context));
+            }
+        } else {
+            saveObstetricHistoryData(dataHolder, data, policy, context);
         }
-        XWikiContext context = this.xcontext.get();
-        BaseObject o = patient.getXDocument().getXObject(getXClassReference(), true, context);
-        for (String property : getProperties()) {
-            o.set(PREFIX + property, data.get(property), context);
-        }
+    }
+
+    /**
+     * Saves the provided obstetric history {@code data} into the {@code dataHolder}, according to the provided
+     * {@code policy}.
+     *
+     * @param dataHolder the {@link BaseObject} that will hold the data
+     * @param data the new obstetric history {@link PatientData} object
+     * @param policy the {@link PatientWritePolicy} according to which patient data will be saved
+     * @param context the {@link XWikiContext} object
+     */
+    private void saveObstetricHistoryData(
+        final BaseObject dataHolder,
+        final PatientData<Integer> data,
+        final PatientWritePolicy policy,
+        final XWikiContext context)
+    {
+        final Predicate<String> propertyFilter = Objects.equals(PatientWritePolicy.MERGE, policy)
+            ? data::containsKey
+            : p -> true;
+        getProperties().stream()
+                .filter(propertyFilter)
+                .forEach(propertyName -> dataHolder.set(PREFIX + propertyName, data.get(propertyName), context));
     }
 
     @Override

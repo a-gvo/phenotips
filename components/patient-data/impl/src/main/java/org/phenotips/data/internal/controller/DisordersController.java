@@ -22,6 +22,7 @@ import org.phenotips.data.IndexedPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.data.internal.PhenoTipsDisorder;
 
 import org.xwiki.component.annotation.Component;
@@ -30,9 +31,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
@@ -210,25 +216,42 @@ public class DisordersController extends AbstractComplexController<Disorder>
     @Override
     public void save(Patient patient)
     {
-        PatientData<Disorder> disorders = patient.getData(this.getName());
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(@Nonnull final Patient patient, @Nonnull final PatientWritePolicy policy)
+    {
+        final BaseObject dataHolder = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
+        if (dataHolder == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+        }
+
+        final PatientData<Disorder> disorders = patient.getData(getName());
+        final XWikiContext context = this.xcontextProvider.get();
         if (disorders == null || !disorders.isIndexed()) {
-            return;
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                dataHolder.set(DISORDER_PROPERTIES_OMIMID, null, context);
+            }
+        } else {
+            final Set<String> disorderValues = getDisorderValues(patient, disorders, policy);
+            dataHolder.set(DISORDER_PROPERTIES_OMIMID, disorderValues, context);
+        }
+    }
+
+    private Set<String> getDisorderValues(final Patient patient, final PatientData<Disorder> disorders,
+        final PatientWritePolicy policy)
+    {
+        final Stream<Disorder> disorderStream;
+        if (Objects.equals(PatientWritePolicy.MERGE, policy)) {
+            final PatientData<Disorder> storedDisorders = load(patient);
+            disorderStream = (storedDisorders != null)
+                ? Stream.of(disorders, storedDisorders).flatMap(s -> StreamSupport.stream(s.spliterator(), false))
+                : StreamSupport.stream(disorders.spliterator(), false);
+        } else {
+            disorderStream = StreamSupport.stream(disorders.spliterator(), false);
         }
 
-        BaseObject data = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
-        XWikiContext context = this.xcontextProvider.get();
-
-        // new disorders list (for setting values in the Wiki document)
-        List<String> disorderValues = new LinkedList<>();
-
-        Iterator<Disorder> iterator = disorders.iterator();
-        while (iterator.hasNext()) {
-            Disorder disorder = iterator.next();
-            disorderValues.add(disorder.getValue());
-        }
-
-        data.set(DISORDER_PROPERTIES_OMIMID, null, context);
-        // update the values in the document (overwriting the old list, if any)
-        data.set(DISORDER_PROPERTIES_OMIMID, disorderValues, context);
+        return disorderStream.map(Disorder::getValue).collect(Collectors.toSet());
     }
 }

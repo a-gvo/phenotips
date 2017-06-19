@@ -21,6 +21,7 @@ import org.phenotips.data.DictionaryPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.vocabulary.VocabularyManager;
 import org.phenotips.vocabulary.VocabularyTerm;
 
@@ -35,13 +36,18 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.MutablePair;
+import org.apache.commons.lang3.tuple.MutableTriple;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -137,6 +143,47 @@ public class GlobalQualifiersController implements PatientDataController<List<Vo
                     dataHolder.set(propertyName, termsToXWikiFormat(terms), context);
                 }
             }
+        }
+    }
+
+    @Override
+    public void save(@Nonnull final Patient patient, @Nonnull final PatientWritePolicy policy)
+    {
+        final BaseObject xobject = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
+        if (xobject == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+        }
+
+        final XWikiContext context = this.xcontextProvider.get();
+        final PatientData<List<VocabularyTerm>> data = patient.getData(getName());
+        final BaseClass xclass = xobject.getXClass(context);
+        if (data == null) {
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                getProperties().forEach(p -> xobject.set(p, null, context));
+            }
+        } else {
+            getProperties().stream()
+                .map(p -> new MutableTriple<>(p, null, data.get(p)))
+                .filter(t -> Objects.nonNull(t.getRight()))
+                .peek(t -> t.setMiddle(xclass.get(t.getLeft())))
+                .filter(t -> Objects.nonNull(t.getMiddle()))
+                .peek(t -> t.setMiddle(((PropertyClass) t.getMiddle()).newProperty()))
+                .forEach(t -> setControllerProperty(t.getLeft(), (PropertyInterface) t.getMiddle(), t.getRight(), xobject));
+        }
+    }
+
+    private void setControllerProperty(
+        @Nonnull final String propertyName,
+        @Nonnull final PropertyInterface xproperty,
+        @Nonnull final List<VocabularyTerm> terms,
+        @Nonnull BaseObject xobject)
+    {
+        // FIXME: ON MERGE???
+        final XWikiContext context = this.xcontextProvider.get();
+        if (xproperty instanceof BaseStringProperty) {
+            xobject.set(propertyName, terms.isEmpty() ? null : termsToXWikiFormat(terms).get(0), context);
+        } else if (xproperty instanceof ListProperty) {
+            xobject.set(propertyName, termsToXWikiFormat(terms), context);
         }
     }
 

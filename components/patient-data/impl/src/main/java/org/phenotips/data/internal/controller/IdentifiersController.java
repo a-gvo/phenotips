@@ -21,6 +21,7 @@ import org.phenotips.data.DictionaryPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 
 import org.xwiki.component.annotation.Component;
 
@@ -29,6 +30,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -80,17 +82,26 @@ public class IdentifiersController implements PatientDataController<String>
     @Override
     public void save(Patient patient)
     {
-        BaseObject data = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(final Patient patient, final PatientWritePolicy policy)
+    {
+        final BaseObject data = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
         if (data == null) {
-            throw new NullPointerException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
         }
 
-        PatientData<String> identifiers = patient.<String>getData(DATA_NAME);
-        if (!identifiers.isNamed()) {
-            return;
+        final PatientData<String> identifiers = patient.getData(DATA_NAME);
+        if (identifiers == null || !identifiers.isNamed()) {
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                data.setStringValue(EXTERNAL_IDENTIFIER_PROPERTY_NAME, null);
+            }
+        } else {
+            final String externalId = identifiers.get(EXTERNAL_IDENTIFIER_PROPERTY_NAME);
+            data.setStringValue(EXTERNAL_IDENTIFIER_PROPERTY_NAME, externalId);
         }
-        String externalId = identifiers.get(EXTERNAL_IDENTIFIER_PROPERTY_NAME);
-        data.setStringValue(EXTERNAL_IDENTIFIER_PROPERTY_NAME, externalId);
     }
 
     @Override

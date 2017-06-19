@@ -20,6 +20,7 @@ package org.phenotips.data.internal.controller;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.data.SimpleValuePatientData;
 
 import org.xwiki.component.annotation.Component;
@@ -29,6 +30,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -84,9 +86,15 @@ public class LifeStatusController implements PatientDataController<String>
     @Override
     public void save(Patient patient)
     {
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(@Nonnull final Patient patient, @Nonnull final PatientWritePolicy policy)
+    {
         BaseObject data = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
         if (data == null) {
-            throw new NullPointerException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
         }
 
         PatientData<String> lifeStatus = patient.getData(DATA_NAME);

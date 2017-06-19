@@ -21,6 +21,7 @@ import org.phenotips.data.DictionaryPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.data.VocabularyProperty;
 import org.phenotips.data.internal.AbstractPhenoTipsVocabularyProperty;
 
@@ -31,15 +32,24 @@ import org.xwiki.model.reference.ObjectPropertyReference;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Provider;
 
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.json.JSONArray;
@@ -293,29 +303,84 @@ public abstract class AbstractComplexController<T> implements PatientDataControl
     @Override
     public void save(Patient patient)
     {
-        BaseObject dataHolder = patient.getXDocument().getXObject(getXClassReference());
-        PatientData<T> data = patient.getData(this.getName());
-        if (dataHolder == null || data == null) {
-            return;
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(@Nonnull final Patient patient, @Nonnull final PatientWritePolicy policy)
+    {
+        final BaseObject dataHolder = patient.getXDocument().getXObject(getXClassReference());
+        if (dataHolder == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
         }
-        XWikiContext context = this.contextProvider.get();
-        for (String propertyName : getProperties()) {
-            Object propertyValue = data.get(propertyName);
-            if (isInKeySet(data, propertyName)) {
-                if (this.getCodeFields().contains(propertyName) && this.isCodeFieldsOnly()) {
-                    @SuppressWarnings("unchecked")
-                    List<VocabularyProperty> terms = (List<VocabularyProperty>) propertyValue;
-                    List<String> listToStore = new LinkedList<>();
-                    for (VocabularyProperty term : terms) {
-                        String name = StringUtils.isNotBlank(term.getId()) ? term.getId() : term.getName();
-                        listToStore.add(name);
-                    }
-                    dataHolder.set(propertyName, listToStore, context);
-                } else {
-                    dataHolder.set(propertyName, this.saveFormat(propertyValue), context);
-                }
+        final PatientData<T> data = patient.getData(this.getName());
+        final XWikiContext context = this.contextProvider.get();
+        if (data == null) {
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                getProperties().forEach(propertyName -> dataHolder.set(propertyName, null, context));
             }
+        } else {
+            final Predicate<String> propertyFilter = getPropertyFilterForPolicy(data, policy);
+            final Function<String, Stream<VocabularyProperty>> toVocabularyPropertyStream =
+                toVocabularyPropertyStream(patient, data, policy);
+            getProperties().stream()
+                .filter(propertyFilter)
+                .forEach(propertyName
+                    -> saveDataForProperty(propertyName, dataHolder, data, toVocabularyPropertyStream, context));
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Function<String, Stream<VocabularyProperty>> toVocabularyPropertyStream(
+        final Patient patient,
+        final PatientData<T> data,
+        final PatientWritePolicy policy)
+    {
+            if (Objects.equals(PatientWritePolicy.MERGE, policy)) {
+                final PatientData<T> storedData = load(patient);
+                return propertyName -> {
+                    final List<VocabularyProperty> storedTermsForProperty =
+                        (storedData == null || storedData.get(propertyName) == null)
+                            ? Collections.emptyList()
+                            : (List<VocabularyProperty>) storedData.get(propertyName);
+
+                    final List<VocabularyProperty> termsForProperty = data.get(propertyName) == null
+                        ? Collections.emptyList()
+                        : (List<VocabularyProperty>) data.get(propertyName);
+
+                    return Stream.of(storedTermsForProperty, termsForProperty).flatMap(Collection::stream);
+                };
+            } else {
+                return propertyName -> {
+                    final List<VocabularyProperty> termsForProperty = (List<VocabularyProperty>) data.get(propertyName);
+                    return (termsForProperty != null) ? termsForProperty.stream() : Stream.empty();
+                };
+            }
+    }
+
+    private Predicate<String> getPropertyFilterForPolicy(final PatientData<T> data, final PatientWritePolicy policy)
+    {
+        return Objects.equals(PatientWritePolicy.REPLACE, policy) ? p -> true : data::containsKey;
+    }
+
+    private void saveDataForProperty(
+        @Nonnull final String propertyName,
+        @Nonnull final BaseObject dataHolder,
+        @Nonnull final PatientData<T> data,
+        @Nonnull final Function<String, Stream<VocabularyProperty>> toVocabularyPropertyStream,
+        @Nonnull final XWikiContext context)
+    {
+        final Object propertyValue = data.get(propertyName);
+        if (getCodeFields().contains(propertyName) && isCodeFieldsOnly()) {
+            @SuppressWarnings("unchecked")
+            final Set<String> listToStore = toVocabularyPropertyStream.apply(propertyName)
+                .map(term -> StringUtils.isNotBlank(term.getId()) ? term.getId() : term.getName())
+                .collect(Collectors.toSet());
+            dataHolder.set(propertyName, listToStore, context);
+        } else {
+            dataHolder.set(propertyName, saveFormat(propertyValue), context);
+        }
+
     }
 
     @Override

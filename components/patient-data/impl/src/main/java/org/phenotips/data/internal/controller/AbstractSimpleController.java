@@ -21,6 +21,7 @@ import org.phenotips.data.DictionaryPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -28,9 +29,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.function.Function;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.ecs.html.S;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 
@@ -73,17 +79,40 @@ public abstract class AbstractSimpleController implements PatientDataController<
     @Override
     public void save(Patient patient)
     {
-        BaseObject xwikiDataObject = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(final Patient patient, final PatientWritePolicy policy)
+    {
+        final BaseObject xwikiDataObject = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
         if (xwikiDataObject == null) {
             throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
         }
-
-        PatientData<String> data = patient.<String>getData(this.getName());
-        if (!data.isNamed()) {
-            return;
+        final PatientData<String> data = patient.getData(getName());
+        if (data == null || !data.isNamed()) {
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                getProperties().forEach(property -> xwikiDataObject.setStringValue(property, StringUtils.EMPTY));
+            }
+        } else {
+            getProperties().forEach(property -> xwikiDataObject
+                .setStringValue(property, propertyToValueFx(patient, data, policy).apply(property)));
         }
-        for (String property : this.getProperties()) {
-            xwikiDataObject.setStringValue(property, data.get(property));
+    }
+
+    private Function<String, String> propertyToValueFx(
+        @Nonnull final Patient patient,
+        @Nonnull final PatientData<String> data,
+        @Nonnull final PatientWritePolicy policy)
+    {
+        if (Objects.equals(PatientWritePolicy.MERGE, policy)) {
+            final PatientData<String> storedData = load(patient);
+            return p -> {
+                final String value = data.get(p);
+                return value == null ? storedData.get(p) : value;
+            };
+        } else {
+            return data::get;
         }
     }
 

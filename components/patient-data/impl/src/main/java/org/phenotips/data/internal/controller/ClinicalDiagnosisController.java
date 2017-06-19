@@ -22,16 +22,27 @@ import org.phenotips.data.IndexedPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientDataController;
+import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.data.internal.PhenoTipsDisorder;
 
 import org.xwiki.component.annotation.Component;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
@@ -109,24 +120,54 @@ public class ClinicalDiagnosisController implements PatientDataController<Disord
     @Override
     public void save(Patient patient)
     {
-        PatientData<Disorder> disorders = patient.getData(this.getName());
+        save(patient, PatientWritePolicy.UPDATE);
+    }
+
+    @Override
+    public void save(@Nonnull final Patient patient, @Nonnull final PatientWritePolicy policy)
+    {
+        final BaseObject xobject = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
+        if (xobject == null) {
+            throw new IllegalArgumentException(ERROR_MESSAGE_NO_PATIENT_CLASS);
+        }
+        // Disorders that need to be saved to the patient.
+        final PatientData<Disorder> disorders = patient.getData(getName());
         if (disorders == null || !disorders.isIndexed()) {
-            return;
+            // If patient write policy is replace, need wipe all existing data if no data provided for controller
+            if (Objects.equals(PatientWritePolicy.REPLACE, policy)) {
+                xobject.set(DIAGNOSIS_PROPERTY, Collections.emptySet(), this.xcontextProvider.get());
+            }
+        } else {
+            final Set<String> disorderValues = disordersToStream(patient, disorders, policy)
+                .map(Disorder::getValue)
+                .collect(Collectors.toSet());
+            xobject.set(DIAGNOSIS_PROPERTY, disorderValues, this.xcontextProvider.get());
         }
+    }
 
-        BaseObject data = patient.getXDocument().getXObject(Patient.CLASS_REFERENCE);
-
-        // new disorders list (for setting values in the Wiki document)
-        List<String> disorderValues = new LinkedList<>();
-
-        Iterator<Disorder> iterator = disorders.iterator();
-        while (iterator.hasNext()) {
-            Disorder disorder = iterator.next();
-            disorderValues.add(disorder.getValue());
+    /**
+     * Creates a stream of {@link Disorder} objects. Will combine {@code disorders} with those stored in {@code patient}
+     * if the write {@code policy} is {@link PatientWritePolicy#MERGE}.
+     *
+     * @param patient the {@link Patient} of interest
+     * @param disorders a {@link PatientData} object containing {@link Disorder disorder} information.
+     * @param policy the selected {@link PatientWritePolicy}
+     * @return a {@link Stream} of {@link Disorder} objects
+     */
+    private Stream<Disorder> disordersToStream(
+        @Nonnull final Patient patient,
+        @Nonnull final PatientData<Disorder> disorders,
+        @Nonnull final PatientWritePolicy policy)
+    {
+        // If the patient write policy is merge, then create a stream of disorders from patient (if any) combined with
+        // the newly loaded disorder data.
+        if (Objects.equals(PatientWritePolicy.MERGE, policy)) {
+            final PatientData<Disorder> storedDisorders = load(patient);
+            return storedDisorders != null
+                ? Stream.of(disorders, storedDisorders).flatMap(s -> StreamSupport.stream(s.spliterator(), false))
+                : StreamSupport.stream(disorders.spliterator(), false);
         }
-
-        // update the values in the document (overwriting the old list, if any)
-        data.set(DIAGNOSIS_PROPERTY, disorderValues, this.xcontextProvider.get());
+        return StreamSupport.stream(disorders.spliterator(), false);
     }
 
     @Override
