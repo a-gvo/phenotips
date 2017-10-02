@@ -15,15 +15,13 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see http://www.gnu.org/licenses/
  */
-package org.phenotips.services.annotations.rest;
+package org.phenotips.services.annotations.rest.internal.utils;
 
 import org.xwiki.component.annotation.Role;
 
-import java.util.Map;
-
 import javax.annotation.Nonnull;
 
-import org.apache.http.client.fluent.Response;
+import org.apache.http.entity.ContentType;
 
 /**
  * Interacts with an annotation REST API endpoint.
@@ -35,12 +33,16 @@ import org.apache.http.client.fluent.Response;
 public interface AnnotationAPI
 {
     /**
-     * @param service the name of the service of interest
-     * @param params the form parameters
-     * @return the {@link Response response}
-     * @throws ServiceException if there is an error with the request, or with finding the requested annotation service
+     * Post the {@code request} parameters to the {@code serviceUrl} provided.
+     *
+     * @param serviceUrl the url for service of interest
+     * @param contentType the {@link ContentType} for the {@code request}
+     * @param request the string containing request parameters
+     * @return the response, as string
+     * @throws ServiceException if there is an error with the request
      */
-    Response postForm(@Nonnull String service, @Nonnull Map<String, String> params) throws ServiceException;
+    String post(@Nonnull String serviceUrl, @Nonnull ContentType contentType, @Nonnull String request)
+        throws ServiceException;
 
     /**
      * An exception returned by the annotation api.

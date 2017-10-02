@@ -24,8 +24,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
-
-import org.apache.http.client.fluent.Response;
+import javax.ws.rs.core.Response;
 
 /**
  * An annotation resource for some service of interest.

@@ -17,12 +17,16 @@
  */
 package org.phenotips.services.annotations.ncr;
 
-import java.util.List;
-import java.util.Map;
+import org.xwiki.component.annotation.Role;
+import org.xwiki.container.Request;
+
+import java.io.IOException;
 
 import javax.annotation.Nonnull;
 
-import org.apache.http.NameValuePair;
+import org.apache.http.entity.ContentType;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 /**
  * An adapter between data formats expected by the clinical text analysis extension and some {@link #getServiceName()}
@@ -31,6 +35,7 @@ import org.apache.http.NameValuePair;
  * @version $Id$
  * @since 1.4
  */
+@Role
 public interface AnnotationAdapter
 {
     /**
@@ -38,24 +43,49 @@ public interface AnnotationAdapter
      *
      * @return the name of the service, as as string
      */
+    @Nonnull
     String getServiceName();
+
+    /**
+     * The full service name (e.g. Neural Concept Recognizer).
+     *
+     * @return the full service name, as string
+     */
+    @Nonnull
+    String getServiceLabel();
 
     /**
      * Return the service URL for the annotation service.
      *
      * @return the endpoint being used by this instance
      */
+    @Nonnull
     String getServiceURL();
+
+    /**
+     * Returns the entity {@link ContentType}.
+     *
+     * @return the {@link ContentType}
+     */
+    ContentType getContentType();
 
     /**
      * Adapts the request parameters to the format expected by {@link #getServiceName()}.
      *
-     * @param params a list name-value pairs to be adapted
+     * @param request the incoming request
      * @return a list of name-value pairs, in format expected by {@link #getServiceName()}
+     * @throws JsonProcessingException if there was an error converting request data to json string
      */
     @Nonnull
-    List<NameValuePair> adaptRequest(@Nonnull Map<String, String> params);
+    String adaptRequest(@Nonnull Request request) throws JsonProcessingException;
 
+    /**
+     * Adapts the response returned by service to the desired format.
+     *
+     * @param response the response from {@link #getServiceURL()} service, as string
+     * @return the adapted response, as string
+     * @throws IOException if {@code response} could not be adapted to the desired format
+     */
     @Nonnull
-    List<NameValuePair> adaptResponse(@Nonnull Map<String, String> params);
+    String adaptResponse(@Nonnull String response) throws IOException;
 }

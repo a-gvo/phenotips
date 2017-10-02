@@ -23,8 +23,7 @@ import org.xwiki.rest.resources.RootResource;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
-
-import org.apache.http.client.fluent.Response;
+import javax.ws.rs.core.Response;
 
 /**
  * A root resource for annotation services.

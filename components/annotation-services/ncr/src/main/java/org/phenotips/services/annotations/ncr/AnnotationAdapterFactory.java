@@ -19,6 +19,8 @@ package org.phenotips.services.annotations.ncr;
 
 import org.xwiki.component.annotation.Role;
 
+import java.util.List;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -33,13 +35,21 @@ import javax.annotation.Nullable;
 public interface AnnotationAdapterFactory
 {
     /**
-     * Constructs a new {@link AnnotationAdapter} instance, that can be used to translate the incoming request into
-     * the format expected by the {@code annotationService}.
+     * Constructs a new {@link AnnotationAdapter} instance, that can be used to translate the incoming request into the
+     * format expected by the {@code annotationService}.
      *
      * @param annotationService the annotation service of interest (e.g. ncr)
-     * @return  the {@link AnnotationAdapter} instance that is associated with the {@code annotationService}, or
-     *          {@code null} if no such instance exists
+     * @return the {@link AnnotationAdapter} instance that is associated with the {@code annotationService}, or {@code
+     * null} if no such instance exists
      */
     @Nullable
     AnnotationAdapter build(@Nonnull String annotationService);
+
+    /**
+     * Returns a list of all available {@link AnnotationAdapter} objects.
+     *
+     * @return a list of all available {@link AnnotationAdapter} objects
+     */
+    @Nonnull
+    List<AnnotationAdapter> getAll();
 }

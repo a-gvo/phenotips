@@ -1,0 +1,2 @@
+org.phenotips.services.annotations.ncr.internal.DefaultAnnotationAdapterFactory
+org.phenotips.services.annotations.ncr.internal.NCRAnnotationAdapter
