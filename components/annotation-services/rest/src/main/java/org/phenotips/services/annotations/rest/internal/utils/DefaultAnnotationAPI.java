@@ -30,8 +30,6 @@ import javax.inject.Singleton;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.entity.ContentType;
 
-import com.google.common.annotations.VisibleForTesting;
-
 /**
  * The default implementation of the {@link AnnotationAPI}.
  *
@@ -62,12 +60,11 @@ public class DefaultAnnotationAPI implements AnnotationAPI
     }
 
     /**
-     * Gets the {@link Request} object for a post request.
+     * Gets the {@link Request} object for a post request. Made visible for testing.
      *
      * @param uri the {@link URI} for the service
      * @return the {@link Request} object
      */
-    @VisibleForTesting
     Request getPostRequest(@Nonnull final URI uri)
     {
         return Request.Post(uri);
