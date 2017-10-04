@@ -110,7 +110,7 @@ public class DefaultAnnotationServiceResource extends XWikiResource implements A
         try {
             final String adaptedRequest = adapter.adaptRequest(request);
             final ContentType contentType = adapter.getContentType();
-            final String response = this.annotationAPI.post(annotationService, contentType, adaptedRequest);
+            final String response = this.annotationAPI.post(adapter.getServiceURL(), contentType, adaptedRequest);
             final String adaptedResponse = adapter.adaptResponse(response);
             return Response.ok(adaptedResponse, MediaType.APPLICATION_JSON_TYPE).build();
         } catch (final AnnotationAPI.ServiceException e) {
