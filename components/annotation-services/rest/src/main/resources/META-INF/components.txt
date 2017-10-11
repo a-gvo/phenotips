@@ -1,3 +1,0 @@
-org.phenotips.services.annotations.rest.internal.DefaultAnnotationServicesResource
-org.phenotips.services.annotations.rest.internal.DefaultAnnotationServiceResource
-org.phenotips.services.annotations.rest.internal.utils.DefaultAnnotationAPI

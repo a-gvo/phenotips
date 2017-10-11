@@ -15,31 +15,44 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see http://www.gnu.org/licenses/
  */
-package org.phenotips.services.annotations.rest;
+package org.phenotips.services.annotations.ncr.internal.utils;
 
-import org.phenotips.rest.ParentResource;
-
-import org.xwiki.rest.resources.RootResource;
-
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.core.Response;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * A root resource for annotation services.
+ * A token object used for translating incoming Neural Concept Recognizer json responses into the json format expected
+ * by the clinical-text-analysis-extension.
  *
  * @version $Id$
  * @since 1.4
  */
-@Path("/services")
-@ParentResource(RootResource.class)
-public interface AnnotationServicesResource
+class NCRToken
 {
     /**
-     * Retrieves all available annotation services.
-     *
-     * @return a {@link Response} containing all available annotation services
+     * The token's id.
      */
-    @GET
-    Response getAllAnnotationServices();
+    @JsonProperty("id")
+    private String id;
+
+    /**
+     * Get the token id.
+     *
+     * @return the id, as string
+     */
+    @JsonProperty("id")
+    String getId()
+    {
+        return this.id;
+    }
+
+    /**
+     * Set the id for token.
+     *
+     * @param id the token id
+     */
+    @JsonProperty("id")
+    void setId(String id)
+    {
+        this.id = id;
+    }
 }

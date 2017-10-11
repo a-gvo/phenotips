@@ -138,6 +138,11 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>phenotips-annotation-service-ncr</artifactId>
+      <version>${phenotips.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.xwiki.platform</groupId>
       <artifactId>xwiki-platform-skin-skinx</artifactId>
       <version>${xwiki.version}</version>

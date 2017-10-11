@@ -31,6 +31,5 @@
 
   <modules>
     <module>ncr</module>
-    <module>rest</module>
   </modules>
 </project>
