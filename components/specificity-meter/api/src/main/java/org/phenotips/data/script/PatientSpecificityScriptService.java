@@ -237,6 +237,12 @@ public class PatientSpecificityScriptService implements ScriptService
         }
 
         @Override
+        public Patient getReadOnly()
+        {
+            return null;
+        }
+
+        @Override
         public XWikiDocument getXDocument()
         {
             return null;

@@ -100,6 +100,12 @@ public class PhenoTipsPatient extends AbstractPrimaryEntity implements Patient
         return CLASS_REFERENCE;
     }
 
+    @Override
+    public Patient getReadOnly()
+    {
+        return new SecurePatient(this);
+    }
+
     private void loadSerializers()
     {
         try {

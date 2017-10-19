@@ -100,6 +100,12 @@ public class PhenotipsFamily extends AbstractPrimaryEntity implements Family
     }
 
     @Override
+    public Family getReadOnly()
+    {
+        return new SecureFamily(this);
+    }
+
+    @Override
     public List<String> getMembersIds()
     {
         BaseObject familyObject = getXDocument().getXObject(CLASS_REFERENCE);

@@ -86,6 +86,14 @@ public interface PrimaryEntity
     Document getSecureDocument();
 
     /**
+     * For use in script services, which should use the secure implementation. Returns a read-only implementation of
+     * itself.
+     *
+     * @return a "secure" read-only {@link PrimaryEntity} implementation
+     */
+    <T extends PrimaryEntity> T getReadOnly();
+
+    /**
      * Returns the internal identifier of the entity.
      *
      * @return a short identifier

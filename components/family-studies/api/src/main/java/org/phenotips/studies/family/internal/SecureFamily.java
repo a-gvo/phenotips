@@ -179,6 +179,13 @@ public class SecureFamily implements Family
     }
 
     @Override
+    public Family getReadOnly()
+    {
+        // Already a read-only entity.
+        return this;
+    }
+
+    @Override
     public String getName()
     {
         return this.family.getName();

@@ -166,6 +166,13 @@ public class SecurePatient implements Patient
     }
 
     @Override
+    public Patient getReadOnly()
+    {
+        // Already a read-only entity.
+        return this;
+    }
+
+    @Override
     public String getId()
     {
         return this.patient.getId();
