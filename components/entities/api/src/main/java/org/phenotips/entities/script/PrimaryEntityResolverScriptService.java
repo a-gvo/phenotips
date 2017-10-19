@@ -19,11 +19,9 @@ package org.phenotips.entities.script;
 
 import org.phenotips.entities.PrimaryEntity;
 import org.phenotips.entities.PrimaryEntityResolver;
-import org.phenotips.security.authorization.AuthorizationService;
 
 import org.xwiki.component.annotation.Component;
 import org.xwiki.script.service.ScriptService;
-import org.xwiki.users.UserManager;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -45,15 +43,8 @@ public class PrimaryEntityResolverScriptService implements ScriptService
 {
     /** The resolver that will do the actual work. */
     @Inject
+    @Named("secure")
     private PrimaryEntityResolver resolver;
-
-    /** Used for obtaining the current user. */
-    @Inject
-    private UserManager userManager;
-
-    /** Used for checking access rights. */
-    @Inject
-    private AuthorizationService access;
 
     /**
      * Retrieve an entity based on its identifier. For this to work correctly, the {@code entityId} must contain a
@@ -67,10 +58,10 @@ public class PrimaryEntityResolverScriptService implements ScriptService
     @Nullable
     public PrimaryEntity resolve(@Nullable final String entityId)
     {
-        if (StringUtils.isBlank(entityId)) {
+        try {
+            return StringUtils.isNotBlank(entityId) ? this.resolver.resolveEntity(entityId) : null;
+        } catch (final SecurityException e) {
             return null;
         }
-
-        return null;
     }
 }
