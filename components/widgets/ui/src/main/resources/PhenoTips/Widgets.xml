@@ -5886,12 +5886,10 @@ document.observe("xwiki:dom:updated", init);
        *                         - "defListItemClass" the css class for the definition list item
        *                         - "qualifierLabel" the label for the qualifier definition list element
        *                         - "qualifierName" the name of the qualifier definition list element
-       *                         - "inputSourceClass" the css class for the input source element
        *                         - "displayedToStoredMapper" custom function mapping displayed value to how it should be stored
        *                         - "storedToDisplayedMapper" custom function mapping stored value to how it should be displayed
        */
       withDatePicker : function(collapsible, options) {
-          var inputSourceClass = options &amp;&amp; options.inputSourceClass || "";
           var spanElem = new Element('span', {'class' : 'fuzzy-date-picker'});
           var dpName = (this._qualifierDataClass &amp;&amp; options.qualifierName)
               ? this._qualifierDataClass + this._globalCount + "_" + options.qualifierName
@@ -5908,6 +5906,21 @@ document.observe("xwiki:dom:updated", init);
           spanElem._addValue = this._addDatePickerValueFx(spanElem, options.qualifierName, options.displayedToStoredMapper);
           options.inline = 'inline';
           return this.withQualifierElement(spanElem, collapsible, options);
+      },
+
+      withHiddenDataElement : function(options) {
+          var spanElem = new Element('span');
+          var inputSourceClass = options ? options.inputSourceClass : "";
+          var hiName = (this._qualifierDataClass &amp;&amp; options.qualifierName)
+              ? this._qualifierDataClass + this._globalCount + "_" + options.qualifierName
+              : this._dataName + '_' + this._elementID + '_' + options.qualifierName;
+          var hiddenInput = new Element('input', {'type' : 'hidden', 'name' : hiName, 'class' : inputSourceClass});
+          hiddenInput.value = options.hiddenDataValue || "";
+          spanElem.insert(hiddenInput);
+          spanElem._getValue = function() { return hiddenInput.value; };
+          spanElem._setValue = function(value) { hiddenInput.value = value; };
+          spanElem._addValue = function(values) { options.qualifierName &amp;&amp; (values[options.qualifierName] = hiddenInput.value); };
+          return this.withQualifierElement(spanElem, false, options);
       },
 
       /**
@@ -6731,6 +6744,14 @@ document.observe("xwiki:dom:updated", init);
               currentDialog.withTextBox(collapsible, options);
           };
           this._dialogOptions.push(addTextBox);
+          return this;
+      },
+
+      dialogsAddHiddenDataElement : function (options) {
+          var addHiddenDataElement = function (currentDialog) {
+              currentDialog.withHiddenDataElement(options);
+          };
+          this._dialogOptions.push(addHiddenDataElement);
           return this;
       },
 
