@@ -5897,7 +5897,7 @@ document.observe("xwiki:dom:updated", init);
               ? this._qualifierDataClass + this._globalCount + "_" + options.qualifierName
               : this._dataName + '_' + this._elementID + '_' + options.qualifierName;
           var dateInput = new Element('input', {'class' : 'fuzzy-date hidden', 'name' : dpName});
-          var fuzzyInput = new Element('input', {'id' : dpName + '_entered', 'name' : dpName + '_entered', 'class' : 'fuzzy-date-json hidden'})
+          var fuzzyInput = new Element('input', {'id' : dpName + '_entered', 'name' : dpName + '_fuzzy', 'class' : 'fuzzy-date-json hidden'})
           spanElem.insert(dateInput).insert(fuzzyInput);
           var fuzzyPicker = new PhenoTips.widgets.FuzzyDatePicker(dateInput, "YMD");
           // Hack :(
