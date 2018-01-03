@@ -5903,7 +5903,7 @@ document.observe("xwiki:dom:updated", init);
           // Hack :(
           fuzzyPicker.__fuzzyInput = fuzzyInput;
           fuzzyPicker.__recordBoth = true;
-          spanElem._getValue = this._getInputValueFx(fuzzyInput);
+          spanElem._getValue = this._getDatePickerValueFx(fuzzyInput);
           spanElem._setValue = this._setDatePickerValueFx(spanElem, options.storedToDisplayedMapper, collapsible);
           spanElem._addValue = this._addDatePickerValueFx(spanElem, options.qualifierName, options.displayedToStoredMapper);
           options.inline = 'inline';
@@ -6267,7 +6267,7 @@ document.observe("xwiki:dom:updated", init);
        * @return {Function} a function for retrieving the value from the input element
        * @private
        */
-      _getInputValueFx: function(inputElem) {
+      _getDatePickerValueFx: function(inputElem) {
           return function() {
               var data = JSON.parse(inputElem.value || '{}');
               var year = data.range ? (data.year ? data.year + "s" : "") : data.year;
