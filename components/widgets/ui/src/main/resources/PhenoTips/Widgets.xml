@@ -5891,36 +5891,24 @@ document.observe("xwiki:dom:updated", init);
        */
       withDatePicker : function(collapsible, options) {
           var spanElem = new Element('span', {'class' : 'fuzzy-date-picker'});
-          var dpName = (this._qualifierDataClass &amp;&amp; options.qualifierName)
+          var dpJsonName = (this._qualifierDataClass &amp;&amp; options.qualifierName)
               ? this._qualifierDataClass + this._globalCount + "_" + options.qualifierName
-              : this._dataName + '_' + this._elementID + '_' + options.qualifierName;
+              : this._dataName + '_' + this._elementID + '_' + (options.qualifierName || "");
+          var dpName = (this._qualifierDataClass &amp;&amp; options.approxQualifierName)
+              ? this._qualifierDataClass + this._globalCount + "_" + options.approxQualifierName
+              : this._dataName + '_' + this._elementID + '_' + (options.approxQualifierName || "");
           var dateInput = new Element('input', {'class' : 'fuzzy-date hidden', 'name' : dpName});
-          var fuzzyInput = new Element('input', {'id' : dpName + '_entered', 'name' : dpName + '_fuzzy', 'class' : 'fuzzy-date-json hidden'})
+          var fuzzyInput = new Element('input', {'id' : dpName + '_entered', 'name' : dpJsonName, 'class' : 'fuzzy-date-json hidden'})
           spanElem.insert(dateInput).insert(fuzzyInput);
           var fuzzyPicker = new PhenoTips.widgets.FuzzyDatePicker(dateInput, "YMD");
           // Hack :(
           fuzzyPicker.__fuzzyInput = fuzzyInput;
           fuzzyPicker.__recordBoth = true;
           spanElem._getValue = this._getDatePickerValueFx(fuzzyInput);
-          spanElem._setValue = this._setDatePickerValueFx(spanElem, options.storedToDisplayedMapper, collapsible);
-          spanElem._addValue = this._addDatePickerValueFx(spanElem, options.qualifierName, options.displayedToStoredMapper);
+          spanElem._setValue = this._setDatePickerValueFx(fuzzyPicker, spanElem, options.storedToDisplayedMapper, collapsible);
+          spanElem._addValue = this._addDatePickerValueFx(spanElem, options.qualifierName, options.approxQualifierName, options.displayedToStoredMapper);
           options.inline = 'inline';
           return this.withQualifierElement(spanElem, collapsible, options);
-      },
-
-      withHiddenDataElement : function(options) {
-          var spanElem = new Element('span');
-          var inputSourceClass = options ? options.inputSourceClass : "";
-          var hiName = (this._qualifierDataClass &amp;&amp; options.qualifierName)
-              ? this._qualifierDataClass + this._globalCount + "_" + options.qualifierName
-              : this._dataName + '_' + this._elementID + '_' + options.qualifierName;
-          var hiddenInput = new Element('input', {'type' : 'hidden', 'name' : hiName, 'class' : inputSourceClass});
-          hiddenInput.value = options.hiddenDataValue || "";
-          spanElem.insert(hiddenInput);
-          spanElem._getValue = function() { return hiddenInput.value; };
-          spanElem._setValue = function(value) { hiddenInput.value = value; };
-          spanElem._addValue = function(values) { options.qualifierName &amp;&amp; (values[options.qualifierName] = hiddenInput.value); };
-          return this.withQualifierElement(spanElem, false, options);
       },
 
       /**
@@ -6290,29 +6278,33 @@ document.observe("xwiki:dom:updated", init);
               if (!year) { return dateStr; }
               dateStr = dateStr + year;
               if (!month) { return dateStr; }
-              dateStr = dateStr + "-" + (month.length > 1 ? month : "0" + month);
-              return day ? dateStr + "-" + (day.length > 1 ? day : "0" + day) : dateStr;
+              dateStr = dateStr + "-" + (month.length &gt; 1 ? month : "0" + month);
+              return day ? dateStr + "-" + (day.length &gt; 1 ? day : "0" + day) : dateStr;
           };
       },
 
-      _setDatePickerValueFx: function(spanElem, valueMapperFx, collapsible) {
+      _setDatePickerValueFx: function(fuzzyPicker, spanElem, valueMapperFx, collapsible) {
           var _this = this;
           return function (value) {
-              var year = (value.range ? (value.year ? value.year + "s" : "") : value.year);
-              year &amp;&amp; (spanElem.down('select.year').value = year);
-              value.month &amp;&amp; (spanElem.down('select.month').value = value.month);
-              value.day &amp;&amp; (spanElem.down('select.day').value = value.day);
-              var hiddenInput = element.down('input.hidden.fuzzy-date-json');
-              hiddenInput &amp;&amp; (hiddenInput.value = value);
+              if (value) {
+                  var year = (value.range ? (value.year ? value.year + "s" : "") : value.year);
+                  year &amp;&amp; (spanElem.down('select.year').value = year);
+                  value.month &amp;&amp; (spanElem.down('select.month').value = value.month);
+                  value.day &amp;&amp; (spanElem.down('select.day').value = value.day);
+                  fuzzyPicker.onProgrammaticUpdate();
+              }
           };
       },
 
-      _addDatePickerValueFx: function (element, qualifierName, valueMapperFx) {
+      _addDatePickerValueFx: function (element, qualifierName, approxQualifierName, valueMapperFx) {
           return function (values) {
               if (qualifierName) {
                   var dateElem = element.down('input.hidden.fuzzy-date-json');
                   var date = dateElem &amp;&amp; dateElem.value || "";
-                  values[qualifierName] = valueMapperFx ? valueMapperFx(date) : date;
+                  var dateJsonElem = element.down('input.hidden.fuzzy-date-json');
+                  var dateJson = dateJsonElem &amp;&amp; dateJsonElem.value || "";
+                  approxQualifierName &amp;&amp; (values[approxQualifierName] = valueMapperFx ? valueMapperFx(date) : date);
+                  qualifierName &amp;&amp; (values[qualifierName] = JSON.parse(dateJson));
               }
           };
       },
@@ -6692,8 +6684,9 @@ document.observe("xwiki:dom:updated", init);
        *
        * @param getGlobalCountFx {Function} a function that retrieves the global qualifier count
        */
-      withGlobalQualifierCount : function (getGlobalCountFx) {
+      withGlobalQualifierCount : function (getGlobalCountFx, setGlobalCountFx) {
           this._globalQualifierCount = getGlobalCountFx;
+          this._setGlobalQualifierCount = setGlobalCountFx;
           return this;
       },
 
@@ -6744,14 +6737,6 @@ document.observe("xwiki:dom:updated", init);
               currentDialog.withTextBox(collapsible, options);
           };
           this._dialogOptions.push(addTextBox);
-          return this;
-      },
-
-      dialogsAddHiddenDataElement : function (options) {
-          var addHiddenDataElement = function (currentDialog) {
-              currentDialog.withHiddenDataElement(options);
-          };
-          this._dialogOptions.push(addHiddenDataElement);
           return this;
       },
 
@@ -6874,6 +6859,7 @@ document.observe("xwiki:dom:updated", init);
        */
       addDialog : function (silent, count) {
           var dialog = this._addDialog(count);
+          this._setGlobalQualifierCount &amp;&amp; count >= this._globalQualifierCount() &amp;&amp; this._setGlobalQualifierCount(++count);
           this._dialogMap[dialog.getID()] = dialog;
           this._applyDialogOptions(dialog);
           !this._allowMultiDialogs &amp;&amp; this._removeDetailsClickListener();
