@@ -6018,10 +6018,8 @@ document.observe("xwiki:dom:updated", init);
        *
        * @param values {Object} the values are key-value pairs, where the keys should be the same as in _qualifierMap
        */
-      setValues : function (values) {
-          if (!values) {
-              return;
-          }
+      setValues: function(values) {
+          if (!values) { return; }
           for (var key in values) {
               if (values.hasOwnProperty(key)) {
                   var elem = this._qualifierMap[key];
@@ -6230,9 +6228,7 @@ document.observe("xwiki:dom:updated", init);
           return function (value) {
               var checkedTitle = valueMapperFx ? valueMapperFx(value) : value;
               var selection = element.down('input[title="' + checkedTitle + '"]');
-              if (!selection) {
-                  return;
-              }
+              if (!selection) { return; }
               selection.checked = true;
               var ddElem = selection.up('dd');
               var dtElem = ddElem &amp;&amp; ddElem.previous('dt');
@@ -6350,8 +6346,7 @@ document.observe("xwiki:dom:updated", init);
           return function (values) {
               var fieldName = qualifierName || null;
               if (fieldName) {
-                  values[fieldName] =
-                      valueMapperFx ? valueMapperFx(element.down('textarea').value) : element.down('textarea').value;
+                  values[fieldName] = valueMapperFx ? valueMapperFx(element.down('textarea').value) : element.down('textarea').value;
               }
           };
       },
@@ -6821,14 +6816,10 @@ document.observe("xwiki:dom:updated", init);
        */
       setValues : function (values, fireEvents) {
           // If no values provided, do nothing.
-          if (!values) {
-              return;
-          }
+          if (!values) { return; }
           this._clearDetails();
           // Wrong term.
-          if (values.id !== undefined &amp;&amp; this._termID !== values.id) {
-              return;
-          }
+          if (values.id !== undefined &amp;&amp; this._termID !== values.id) { return; }
           // Want to change the label.
           if (values.label !== undefined) {
               var trimmedLabel = values.label &amp;&amp; values.label.strip();
@@ -6929,8 +6920,7 @@ document.observe("xwiki:dom:updated", init);
        * @private
        */
       _buildEmptyContainer : function () {
-          this._qualifiersContainer =
-              new Element('table', {'class' : 'summary-group ' + this._dataName + "-summary-group"});
+          this._qualifiersContainer = new Element('table', {'class' : 'summary-group ' + this._dataName + "-summary-group"});
           this._qualifiersContainer.name = this._dataName;
 
           this._dialogHolder = new Element('td', {'class' : 'dialog-holder'});
@@ -6950,9 +6940,7 @@ document.observe("xwiki:dom:updated", init);
       },
 
       _addTooltip : function (tooltip) {
-          if (!tooltip) {
-              return;
-          }
+          if (!tooltip) { return; }
           var infoTool = "";
           var termData = this._qualifiersContainer.down('span.term-data');
           if ("notmapped" === tooltip) {
@@ -7140,9 +7128,7 @@ document.observe("xwiki:dom:updated", init);
           // Observe adding of a new dialog. Want to blur any focused dialogs and focus the added dialog.
           document.observe(this._dataName + ':dialog:added', function (event) {
               var addedDialog = event.memo &amp;&amp; event.memo.element;
-              if (!addedDialog) {
-                  return;
-              }
+              if (!addedDialog) { return; }
               if (addedDialog.up('td.dialog-holder') === _this._dialogHolder) {
                   if (_this._crtFocus) {
                       _this._blur(_this._crtFocus);
